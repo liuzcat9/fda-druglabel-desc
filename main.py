@@ -1,4 +1,6 @@
-import json
+import time
+
+import json, ijson
 import string
 import pandas as pd
 import matplotlib
@@ -7,6 +9,7 @@ import matplotlib_venn
 import itertools
 
 import networkx as nx
+import bokeh
 from bokeh.io import output_file, show
 from bokeh.models import (BoxZoomTool, Circle, HoverTool,
                           MultiLine, Plot, Range1d, ResetTool,
@@ -86,27 +89,141 @@ def find_matching_indic(drug1_products, similar_products, original_indic_set):
 
 # main
 def main():
-    # source: https://open.fda.gov/downloads/
+    # # source: https://open.fda.gov/downloads/
+    # # load full json file
+    # t0 = time.time()
+    # with open("drug-label-0001-of-0008.json") as file:
+    #     drug1 = json.load(file)
+    # t1 = time.time()
+    # print(t1 - t0)
+    #
+    # print(len(drug1["results"])) # how many drugs there are
+    #
+    # # extract n drugs' information
+    # n_trunc = len(drug1["results"])
+    # drug1_trunc = drug1["results"][0:n_trunc - 1]
+    #
+    # # use source: https://gist.github.com/deekayen/4148741 to eliminate mundane words
+    # with open("common_english.txt") as f:
+    #     mundane = f.read().splitlines() # read without newline character
+    #
+    # # 1: generate key purposes
+    # rank_purpose(drug1_trunc, mundane)
+    #
+    # # 2: Venn Diagram similarity between most similar drugs based on purpose keyword/indication matches
+    # # reorganize dictionary such that brand names appear as the key
+    # drug1_products = dict()
+    # for item in drug1_trunc:
+    #     if ("openfda" in item.keys() and "brand_name" in item["openfda"].keys() and "purpose" in item.keys()): # have to check for nonexistent data
+    #         drug1_products[item["openfda"]["brand_name"][0]] = item
+    #
+    # # choose a drug
+    # original = "H. Pylori Plus"
+    # # find drug purpose
+    # original_purpose = drug1_products[original]["purpose"]
+    # # find top purpose keyword
+    # original_purpose_list = clean_list(original_purpose[0].split(), mundane)
+    #
+    # # find similar products by purpose
+    # similar_products = find_similar_products_purpose(drug1_products, original_purpose_list, original, mundane)
+    #
+    # # within similar products, find matching indications
+    # original_indic_set = set(drug1_products[original]["indications_and_usage"][0].split())
+    # top_indic = find_matching_indic(drug1_products, similar_products, original_indic_set)
+    #
+    # # find top "similar indications, same-purpose medications"
+    # top_indic_df = pd.DataFrame(top_indic.items(), columns=["Product", "Match_Words"])
+    # top_indic_df = top_indic_df.sort_values(by="Match_Words", ascending=False)
+    #
+    # print(top_indic_df)
+    # print(original_indic_set)
+    #
+    # # plot top 3 by matching indications to original product
+    # plt.figure()
+    # venn = matplotlib_venn.venn3([original_indic_set,
+    #                        set(drug1_products[top_indic_df.iloc[0]['Product']]["indications_and_usage"][0].split()),
+    #                        set(drug1_products[top_indic_df.iloc[1]['Product']]["indications_and_usage"][0].split())],
+    #                       set_labels=[original, top_indic_df.iloc[0]['Product'], top_indic_df.iloc[1]['Product']])
+    # plt.title("Indication Word Matches in Common Purpose Product Labels", fontsize=10)
+    # plt.show()
+    #
+    # # 3. Generate a graph node network of top products and their similarity to each other
+    # # permute through all combinations of original and top 2 products to numerically obtain the venn diagram similarities
+    # product_list = [original]
+    # product_list.extend(list(top_indic_df.iloc[0:5, 0]))
+    # itr_products = product_list
+    # product_comb = list(itertools.combinations(itr_products, 2)) # convert permutations of product names into list
+    #
+    # # Generate a network graph from the venn diagram interactions
+    # venn_G = nx.Graph()
+    #
+    # # iterate through products and generate nodes with attributes
+    # for product in itr_products:
+    #     venn_G.add_node(product, name=product)
+    #
+    # # iterate through all combinations and find similarities,
+    # # generate graph with edges weighted by similarity
+    # for comb in product_comb:
+    #     set1 = set(drug1_products[comb[0]]["indications_and_usage"][0].split())
+    #     set2 = set(drug1_products[comb[1]]["indications_and_usage"][0].split())
+    #
+    #     # set weight of edges to reflect closeness of relationships (inverse)
+    #     relation = len(set1.intersection(set2))
+    #     venn_G.add_edge(comb[0], comb[1], weight=relation)
+    #
+    # print(venn_G.edges(data=True))
+    #
+    # # Display the network graph from the venn diagram interactions
+    # plot = figure(title="Network of Top Similar Drugs by Indications and Usage", x_range=(-5, 5), y_range=(-5, 5),
+    #               tools="", toolbar_location=None)
+    # # generate hover capabilities
+    # node_hover_tool = HoverTool(tooltips=[("name", "@name")])
+    # plot.add_tools(node_hover_tool, BoxZoomTool(), ResetTool())
+    #
+    # graph = from_networkx(venn_G, nx.spring_layout, scale=2, center=(0, 0))
+    #
+    # # vary thickness with node length
+    # # weight influence helped by https://stackoverflow.com/questions/49136867/networkx-plotting-in-bokeh-how-to-set-edge-width-based-on-graph-edge-weight
+    # graph.edge_renderer.data_source.data["line_width"] = [venn_G.get_edge_data(a, b)['weight']/10 for a, b in
+    #                                                                venn_G.edges()]
+    # graph.edge_renderer.glyph.line_width = {'field': 'line_width'}
+    #
+    # # graph settings
+    # graph.node_renderer.glyph = Circle(size=15, fill_color="blue")
+    # graph.edge_renderer.hover_glyph = MultiLine(line_color="red", line_width={'field': 'line_width'})
+    # graph.inspection_policy = NodesAndLinkedEdges()
+    #
+    # plot.renderers.append(graph)
+    #
+    # output_file("networkx_graph.html")
+    # show(plot)
+
+    # reading using ijson
+    t0 = time.time()
+    drug1 = []
+    drug1_trunc = []
     with open("drug-label-0001-of-0008.json") as file:
-        drug1 = json.load(file)
+        objects = ijson.items(file, "results.item")
+        drug1 = [o for o in objects]
 
-    print(len(drug1["results"])) # how many drugs there are
+    t1 = time.time()
 
-    # extract n drugs' information
-    n_trunc = len(drug1["results"])
-    drug1_trunc = drug1["results"][0:n_trunc - 1]
+    print(t1 - t0)
+
+    # drug1 is a list of all viable objects
+    print(len(drug1)) # how many drugs there are
 
     # use source: https://gist.github.com/deekayen/4148741 to eliminate mundane words
     with open("common_english.txt") as f:
         mundane = f.read().splitlines() # read without newline character
 
     # 1: generate key purposes
-    rank_purpose(drug1_trunc, mundane)
+    rank_purpose(drug1, mundane)
 
     # 2: Venn Diagram similarity between most similar drugs based on purpose keyword/indication matches
     # reorganize dictionary such that brand names appear as the key
     drug1_products = dict()
-    for item in drug1_trunc:
+    for item in drug1:
         if ("openfda" in item.keys() and "brand_name" in item["openfda"].keys() and "purpose" in item.keys()): # have to check for nonexistent data
             drug1_products[item["openfda"]["brand_name"][0]] = item
 
