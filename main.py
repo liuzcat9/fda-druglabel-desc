@@ -15,6 +15,7 @@ from bokeh.models import (BoxZoomTool, Circle, HoverTool,
                           MultiLine, Plot, Range1d, ResetTool,
                           NodesAndLinkedEdges, EdgesAndLinkedNodes)
 from bokeh.plotting import figure, from_networkx
+from bokeh.embed import components
 
 import spacy
 from spacy.lang.en import English
@@ -170,7 +171,8 @@ def main():
 
     # iterate through products and generate nodes with attributes
     for product in itr_products:
-        venn_G.add_node(product, name=product)
+        venn_G.add_node(product, name=product,
+                        purpose=drug1_df.loc[drug1_df["brand_name"] == product]["purpose"])
 
     # iterate through all combinations and find similarities,
     # generate graph with edges weighted by similarity
@@ -188,7 +190,7 @@ def main():
     plot = figure(title="Network of Top Similar Drugs by Indications and Usage", x_range=(-5, 5), y_range=(-5, 5),
                   tools="", toolbar_location=None)
     # generate hover capabilities
-    node_hover_tool = HoverTool(tooltips=[("name", "@name")])
+    node_hover_tool = HoverTool(tooltips=[("name", "@name"), ("purpose", "@purpose")], show_arrow = False)
     plot.add_tools(node_hover_tool, BoxZoomTool(), ResetTool())
 
     graph = from_networkx(venn_G, nx.spring_layout, scale=2, center=(0, 0))
@@ -205,6 +207,10 @@ def main():
     graph.inspection_policy = NodesAndLinkedEdges()
 
     plot.renderers.append(graph)
+
+    # script, div = components(plot)
+    # print(script)
+    # print(div)
 
     output_file("networkx_graph.html")
     show(plot)
