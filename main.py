@@ -31,13 +31,17 @@ def clean_list(purpose_str, nlp):
 # 1. Finds top most searched purposes
 def rank_purpose(drug1_df):
     drug1_trunc = drug1_df.dropna(subset = ["purpose"])
-    # join all text into big string
-    purpose_str = " ".join(drug1_trunc["purpose"])
+
     nlp = English()
-    purpose_list = clean_list(purpose_str, nlp)
+    master_list = []
+
+    # in light of processing memory, perform cleaning separately
+    for purpose in drug1_trunc["purpose"].tolist():
+        purpose_list = clean_list(purpose, nlp)
+        master_list.extend(purpose_list)
 
     purposes = dict()
-    for word in purpose_list:
+    for word in master_list:
         # add keywords into purpose dict
         if (word not in purposes.keys()):
             purposes[word] = 0
@@ -145,7 +149,7 @@ def main():
         mundane = f.read().splitlines() # read without newline character
 
     # 1: generate key purposes
-    # rank_purpose(drug1_df)
+    rank_purpose(drug1_df)
 
     print("Full length: ", str(len(drug1_df)))
 
