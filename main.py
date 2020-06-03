@@ -108,38 +108,33 @@ def main():
     nlp = English()
     # reading using ijson
     t0 = time.time()
-    drug1 = []
-    drug1_temp = []
-    with open("drug-label-0001-of-0008.json") as file:
-        objects = ijson.items(file, "results.item")
 
-        # obtain information in a dataframe
-        for o in objects:
-            drug1_temp.append([o["purpose"][0] if "purpose" in o.keys() else None,
-                          o["id"] if "id" in o.keys() else None,
-                          o["openfda"]["brand_name"][0] if ("openfda" in o.keys() and "brand_name" in o["openfda"].keys()) else None,
-                          o["indications_and_usage"][0] if "indications_and_usage" in o.keys() else None])
-            drug1.append(o)
+    drug1_df = pd.DataFrame(columns=["purpose", "id", "brand_name", "indications_and_usage"])
 
-    # add second file and combine
-    drug2_temp = []
-    with open("drug-label-0002-of-0008.json") as file:
-        objects = ijson.items(file, "results.item")
+    # loop over and read all information
+    file_list = ["drug-label-0001-of-0008.json", "drug-label-0002-of-0008.json"]
 
-        # obtain information in a dataframe
-        for o in objects:
-            drug2_temp.append([o["purpose"][0] if "purpose" in o.keys() else None,
-                          o["id"] if "id" in o.keys() else None,
-                          o["openfda"]["brand_name"][0] if ("openfda" in o.keys() and "brand_name" in o["openfda"].keys()) else None,
-                          o["indications_and_usage"][0] if "indications_and_usage" in o.keys() else None])
+    for filename in file_list:
+        current = []
+        current_temp = []
+        with open(filename) as file:
+            objects = ijson.items(file, "results.item")
+
+            # obtain information in a dataframe
+            for o in objects:
+                current_temp.append([o["purpose"][0] if "purpose" in o.keys() else None,
+                                   o["id"] if "id" in o.keys() else None,
+                                   o["openfda"]["brand_name"][0] if (
+                                               "openfda" in o.keys() and "brand_name" in o["openfda"].keys()) else None,
+                                   o["indications_and_usage"][0] if "indications_and_usage" in o.keys() else None])
+                current.append(o)
+
+        # compile master dataframe
+        current_df = pd.DataFrame(current_temp, columns=["purpose", "id", "brand_name", "indications_and_usage"])
+        drug1_df = pd.concat([drug1_df, current_df])
 
     t1 = time.time()
     print(t1 - t0)
-
-    # visualize dataframe of drug info
-    drug1_df = pd.DataFrame(drug1_temp, columns = ["purpose", "id", "brand_name", "indications_and_usage"])
-    drug2_df = pd.DataFrame(drug2_temp, columns=["purpose", "id", "brand_name", "indications_and_usage"])
-    drug1_df = pd.concat([drug1_df, drug2_df])
 
     # drug1 is a list of all viable objects
     print(drug1_df) # how many drugs there are
