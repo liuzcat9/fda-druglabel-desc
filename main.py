@@ -82,7 +82,6 @@ def find_matching_indic(drug1_df, similar_products, original):
 
     # set original indications
     original_indic_set = set(clean_list(drug1_df.loc[drug1_df["brand_name"] == original, "indications_and_usage"].values[0], nlp))
-    print(original_indic_set)
     # within similar purpose products, find the ones with top similarities in indications and usage
     top_indic = dict()
 
@@ -120,49 +119,69 @@ def main():
     drug1_df = pd.DataFrame(drug1_temp, columns = ["purpose", "brand_name", "indications_and_usage"])
 
     # drug1 is a list of all viable objects
-    print(drug1_df) # how many drugs there are
-
-    # # use source: https://gist.github.com/deekayen/4148741 to eliminate mundane words
-    # with open("common_english.txt") as f:
-    #     mundane = f.read().splitlines() # read without newline character
-
-    # 1: generate key purposes
-    rank_purpose(drug1_df)
-
-    print(len(drug1_df))
+    # print(drug1_df) # how many drugs there are
+    #
+    # # # use source: https://gist.github.com/deekayen/4148741 to eliminate mundane words
+    # # with open("common_english.txt") as f:
+    # #     mundane = f.read().splitlines() # read without newline character
+    #
+    # # 1: generate key purposes
+    # rank_purpose(drug1_df)
+    #
+    print("Full length: ", str(len(drug1_df)))
 
     # 2: Venn Diagram similarity between most similar drugs based on purpose keyword/indication matches
-    # choose a drug
-    original = "H. Pylori Plus"
-    # find drug purpose
-    original_purpose = drug1_df.loc[drug1_df["brand_name"] == original, "purpose"].values[0]
-    # find top purpose keyword
-    original_purpose_list = clean_list(original_purpose, nlp)
+    # # choose a drug
+    # original = "H. Pylori Plus"
+    # # find drug purpose
+    # original_purpose = drug1_df.loc[drug1_df["brand_name"] == original, "purpose"].values[0]
+    # # find top purpose keyword
+    # original_purpose_list = clean_list(original_purpose, nlp)
+    #
+    # # find similar products by purpose
+    # similar_products = find_similar_products_purpose(drug1_df, original_purpose_list, original)
+    #
+    # # within similar products, find matching indications for same-purpose medications
+    # top_indic_df = find_matching_indic(drug1_df, similar_products, original)
+    #
+    # original_indic_set = set(
+    #     clean_list(drug1_df.loc[drug1_df["brand_name"] == original, "indications_and_usage"].values[0], nlp))
+    #
+    # print(top_indic_df)
+    #
+    # # plot top 3 by matching indications to original product
+    # plt.figure()
+    # venn = matplotlib_venn.venn3([original_indic_set,
+    #                               set(clean_list(drug1_df.loc[drug1_df["brand_name"] == top_indic_df.iloc[0]['Product'], "indications_and_usage"].values[0], nlp)),
+    #                               set(clean_list(drug1_df.loc[drug1_df["brand_name"] == top_indic_df.iloc[1]['Product'], "indications_and_usage"].values[0], nlp))],
+    #                               set_labels = [original, top_indic_df.iloc[0]['Product'], top_indic_df.iloc[1]['Product']])
+    # plt.title("Indication Word Matches in Common Purpose Product Labels", fontsize=10)
+    # plt.show()
 
-    # find similar products by purpose
-    similar_products = find_similar_products_purpose(drug1_df, original_purpose_list, original)
+    # 2b: Use purpose to find top products to compare
+    # set drug purpose
+    original_purpose = "antiseptic"
 
-    # within similar products, find matching indications for same-purpose medications
-    top_indic_df = find_matching_indic(drug1_df, similar_products, original)
+    # FUNC: find similar products by purpose as list
+    purpose_df = drug1_df.dropna()  # exclude all rows with columns of null
 
-    original_indic_set = set(
-        clean_list(drug1_df.loc[drug1_df["brand_name"] == original, "indications_and_usage"].values[0], nlp))
+    print("Has all non-null: ", str(purpose_df.count(axis=0)))
+
+    similar_products = []
+    similar_products.extend(purpose_df.loc[purpose_df["purpose"].str.contains(original_purpose)]["brand_name"].tolist()) # append each one separately
+
+    print("Length of similar products: ", str(len(similar_products)))
+
+    # using first product of selected purpose, find matching indications for same-purpose medications
+    product = similar_products[0]
+    top_indic_df = find_matching_indic(drug1_df, similar_products[1:], product)
 
     print(top_indic_df)
 
-    # plot top 3 by matching indications to original product
-    plt.figure()
-    venn = matplotlib_venn.venn3([original_indic_set,
-                                  set(clean_list(drug1_df.loc[drug1_df["brand_name"] == top_indic_df.iloc[0]['Product'], "indications_and_usage"].values[0], nlp)),
-                                  set(clean_list(drug1_df.loc[drug1_df["brand_name"] == top_indic_df.iloc[1]['Product'], "indications_and_usage"].values[0], nlp))],
-                                  set_labels = [original, top_indic_df.iloc[0]['Product'], top_indic_df.iloc[1]['Product']])
-    plt.title("Indication Word Matches in Common Purpose Product Labels", fontsize=10)
-    plt.show()
-
     # 3. Generate a graph node network of top products and their similarity to each other
     # permute through all combinations of original and top 2 products to numerically obtain the venn diagram similarities
-    product_list = [original]
-    product_list.extend(list(top_indic_df.iloc[0:5, 0]))
+    product_list = [product]
+    product_list.extend(list(top_indic_df.iloc[:, 0]))
     itr_products = product_list
     product_comb = list(itertools.combinations(itr_products, 2)) # convert permutations of product names into list
 
@@ -183,8 +202,6 @@ def main():
         # set weight of edges to reflect closeness of relationships (inverse)
         relation = len(set1.intersection(set2))
         venn_G.add_edge(comb[0], comb[1], weight=relation)
-
-    print(venn_G.edges(data=True))
 
     # Display the network graph from the venn diagram interactions
     plot = figure(title="Network of Top Similar Drugs by Indications and Usage", x_range=(-5, 5), y_range=(-5, 5),
