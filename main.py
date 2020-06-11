@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib_venn
 import itertools
 
+import numpy as np
 import networkx as nx
 import bokeh
 from bokeh.io import output_file, show
@@ -205,31 +206,75 @@ def main():
 
     product_comb = list(itertools.combinations(itr_products, 2)) # convert permutations of product names into list
 
-    # Generate a network graph from the venn diagram interactions
-    venn_G = nx.Graph()
+    # create mapping dictionaries
+    name_to_num = {}
+    num_to_name = {}
+    attr_dict = {} # attributes of nodes to be added
 
-    # iterate through products and generate nodes with attributes
-    for product_id in itr_products:
-        venn_G.add_node(product_id, name=drug1_df.loc[drug1_df["id"] == product_id]["brand_name"],
-                        purpose=drug1_df.loc[drug1_df["id"] == product_id]["purpose"])
+    # iterate through products and generate attributes/mappings
+    for i, product_id in enumerate(itr_products):
+        name_to_num[product_id] = i
+        num_to_name[i] = product_id
+        attr_dict[product_id] = {"id": product_id, "name": drug1_df.loc[drug1_df["id"] == product_id]["brand_name"],
+        "purpose": drug1_df.loc[drug1_df["id"] == product_id]["purpose"]}
 
-    # iterate through all combinations and find similarities,
-    # generate graph with edges weighted by similarity
+    # generate graph with top 3 edges per node weighted by similarity
+    # iterate through all combinations and find similarities
+
+    # create adjacency matrix
+    adj_mat = np.zeros((len(product_list), len(product_list)))
+
+    current_node = product_comb[0][0]   # the node for which we are calculating the top 3 edges
+
+    adj_node_weights = []  # the current node storage for edges
+    adj_node_list = []
     for comb in product_comb:
         set1 = set(clean_list(drug1_df.loc[drug1_df["id"] == comb[0], "indications_and_usage"].values[0], nlp))
         set2 = set(clean_list(drug1_df.loc[drug1_df["id"] == comb[1], "indications_and_usage"].values[0], nlp))
 
         # set weight of edges to reflect closeness of relationships (inverse)
         relation = len(set1.intersection(set2))
-        venn_G.add_edge(comb[0], comb[1], weight=relation)
 
-    print("Number of edges: ", str(len(venn_G.edges("cde70a36-38fa-44b4-9036-d6a5b1ea7a48"))))
+        if comb[0] != current_node:
+            # find the top 3 nodes by weight
+            # make sortable data structure
+            adj_node_df = pd.Series(data=adj_node_weights, index=adj_node_list)
+            adj_node_df = adj_node_df.sort_values(ascending=False)
+
+            # set top 3 (inclusive of all currently) in edge adjacency matrix
+            for i in range(0, 3) if adj_node_df.count() >= 3 else range(0, adj_node_df.count()):
+                adj_mat[name_to_num[current_node], name_to_num[adj_node_df.index[i]]] = adj_node_df.iat[i]
+                adj_mat[name_to_num[adj_node_df.index[i]], name_to_num[current_node]] = adj_node_df.iat[i]
+
+            # reset edge storage to current edge
+            current_node = comb[0]
+            adj_node_weights = []
+            adj_node_list = []
+
+        # continuation of edge accumulation
+        adj_node_list.append(comb[1])  # corresponding node to weight
+        adj_node_weights.append(relation)  # corresponding weight
+
+    # account for last combination
+    adj_node_df = pd.Series(data=adj_node_weights, index=adj_node_list)
+    adj_node_df = adj_node_df.sort_values(ascending=False)
+
+    adj_mat[name_to_num[current_node], name_to_num[adj_node_df.index[0]]] = adj_node_df.iat[0]
+    adj_mat[name_to_num[adj_node_df.index[0]], name_to_num[current_node]] = adj_node_df.iat[0]
+
+    print(adj_mat)
+
+    venn_G = nx.from_numpy_matrix(adj_mat) # create from adjacency matrix
+    venn_G = nx.relabel.relabel_nodes(venn_G, num_to_name) # set node names to product ids
+    nx.set_node_attributes(venn_G, attr_dict) # add relevant attributes in
+
+    print("Number of nodes: ", str(len(venn_G.nodes)))
 
     # Display the network graph from the venn diagram interactions
     plot = figure(title="Network of Top Similar Drugs by Indications and Usage", x_range=(-5, 5), y_range=(-5, 5),
                   tools="pan,lasso_select,box_select", toolbar_location="right")
     # generate hover capabilities
-    node_hover_tool = HoverTool(tooltips=[("name", "@name"), ("purpose", "@purpose")], show_arrow = False)
+    node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("name", "@name"), ("purpose", "@purpose")], show_arrow = False)
     plot.add_tools(node_hover_tool, BoxZoomTool(), ResetTool())
 
     graph = from_networkx(venn_G, nx.spring_layout, scale=2, center=(0, 0))
