@@ -218,20 +218,17 @@ def main():
         attr_dict[product_id] = {"id": product_id, "name": drug1_df.loc[drug1_df["id"] == product_id]["brand_name"],
         "purpose": drug1_df.loc[drug1_df["id"] == product_id]["purpose"]}
 
-    # generate graph with top 3 edges per node weighted by similarity
+    # generate graph with top n edges per node weighted by similarity
     # iterate through all combinations and find similarities
 
     # create adjacency matrix
     adj_mat = np.zeros((len(product_list), len(product_list)))
 
     # method 1
-    # current_node = product_comb[0][0]   # the node for which we are calculating the top 3 edges
+    # current_node = product_comb[0][0]   # the node for which we are calculating the top n edges
 
-    adj_node_weights = []  # the current node storage for edges
-    adj_node_list = []
-
-    # method 2: find n greatest edges by weight and plot those
-    current_node_list = []
+    # adj_node_weights = []  # the current node storage for edges
+    # adj_node_list = []
 
     for comb in product_comb:
         set1 = set(clean_list(drug1_df.loc[drug1_df["id"] == comb[0], "indications_and_usage"].values[0], nlp))
@@ -240,11 +237,11 @@ def main():
         # set weight of edges to reflect closeness of relationships (inverse)
         relation = len(set1.intersection(set2))
 
-        current_node_list.append(comb[0])
-        adj_node_list.append(comb[1])
-        adj_node_weights.append(relation)
+        # method 2: generate adjacency matrix
+        adj_mat[name_to_num[comb[0]], name_to_num[comb[1]]] = relation
+        adj_mat[name_to_num[comb[1]], name_to_num[comb[0]]] = relation
 
-        # method 1: take top 3 per iterative combination
+        # method 1
         # if comb[0] != current_node:
         #     # find the top 3 nodes by weight
         #     # make sortable data structure
@@ -265,17 +262,15 @@ def main():
         # adj_node_list.append(comb[1])  # corresponding node to weight
         # adj_node_weights.append(relation)  # corresponding weight
 
-    # method 2: sort dataframe and create adjacency matrix of top n strongest relationships
-    edge_df = pd.DataFrame(list(zip(current_node_list, adj_node_list, adj_node_weights)), columns=["node1", "node2", "weight"])
-    edge_df = edge_df.sort_values(by="weight", ascending=False)
+    # method 2: narrow adjacency matrix to max n edges per node (including previously determined max edges)
+    sparse_mat = np.zeros((len(itr_products), len(itr_products)))
+    for current_node_i in range(0, len(itr_products)):
+        adj_node_indexes = adj_mat[current_node_i].argsort()[-7:][::-1] # max n edges per node by weight (duplicate possible)
+        for adj_node_i in adj_node_indexes:
+            sparse_mat[current_node_i][adj_node_i] = adj_mat[current_node_i][adj_node_i]
+            sparse_mat[adj_node_i][current_node_i] = adj_mat[current_node_i][adj_node_i]
 
-    # generate adjacency matrix
-    for index in range(0, 100) if len(edge_df) >= 50 else range(0, len(edge_df)): # n edges
-        rowdata = edge_df.iloc[index]
-        adj_mat[name_to_num[rowdata.node1], name_to_num[rowdata.node2]] = rowdata.weight
-        adj_mat[name_to_num[rowdata.node2], name_to_num[rowdata.node1]] = rowdata.weight # extra edge may be unnecessary
-
-    # method 1 cont.
+    # method 1
     # # account for last combination
     # adj_node_df = pd.Series(data=adj_node_weights, index=adj_node_list)
     # adj_node_df = adj_node_df.sort_values(ascending=False)
@@ -284,8 +279,9 @@ def main():
     # adj_mat[name_to_num[adj_node_df.index[0]], name_to_num[current_node]] = adj_node_df.iat[0]
 
     print(adj_mat)
+    print(sparse_mat)
 
-    venn_G = nx.from_numpy_matrix(adj_mat) # create from adjacency matrix
+    venn_G = nx.from_numpy_matrix(sparse_mat) # create from adjacency matrix
     venn_G = nx.relabel.relabel_nodes(venn_G, num_to_name) # set node names to product ids
     nx.set_node_attributes(venn_G, attr_dict) # add relevant attributes in
 
