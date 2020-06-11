@@ -224,10 +224,15 @@ def main():
     # create adjacency matrix
     adj_mat = np.zeros((len(product_list), len(product_list)))
 
-    current_node = product_comb[0][0]   # the node for which we are calculating the top 3 edges
+    # method 1
+    # current_node = product_comb[0][0]   # the node for which we are calculating the top 3 edges
 
     adj_node_weights = []  # the current node storage for edges
     adj_node_list = []
+
+    # method 2: find n greatest edges by weight and plot those
+    current_node_list = []
+
     for comb in product_comb:
         set1 = set(clean_list(drug1_df.loc[drug1_df["id"] == comb[0], "indications_and_usage"].values[0], nlp))
         set2 = set(clean_list(drug1_df.loc[drug1_df["id"] == comb[1], "indications_and_usage"].values[0], nlp))
@@ -235,32 +240,48 @@ def main():
         # set weight of edges to reflect closeness of relationships (inverse)
         relation = len(set1.intersection(set2))
 
-        if comb[0] != current_node:
-            # find the top 3 nodes by weight
-            # make sortable data structure
-            adj_node_df = pd.Series(data=adj_node_weights, index=adj_node_list)
-            adj_node_df = adj_node_df.sort_values(ascending=False)
+        current_node_list.append(comb[0])
+        adj_node_list.append(comb[1])
+        adj_node_weights.append(relation)
 
-            # set top 3 (inclusive of all currently) in edge adjacency matrix
-            for i in range(0, 3) if adj_node_df.count() >= 3 else range(0, adj_node_df.count()):
-                adj_mat[name_to_num[current_node], name_to_num[adj_node_df.index[i]]] = adj_node_df.iat[i]
-                adj_mat[name_to_num[adj_node_df.index[i]], name_to_num[current_node]] = adj_node_df.iat[i]
+        # method 1: take top 3 per iterative combination
+        # if comb[0] != current_node:
+        #     # find the top 3 nodes by weight
+        #     # make sortable data structure
+        #     adj_node_df = pd.Series(data=adj_node_weights, index=adj_node_list)
+        #     adj_node_df = adj_node_df.sort_values(ascending=False)
+        #
+        #     # set top 3 (inclusive of all currently) in edge adjacency matrix
+        #     for i in range(0, 3) if adj_node_df.count() >= 3 else range(0, adj_node_df.count()):
+        #         adj_mat[name_to_num[current_node], name_to_num[adj_node_df.index[i]]] = adj_node_df.iat[i]
+        #         adj_mat[name_to_num[adj_node_df.index[i]], name_to_num[current_node]] = adj_node_df.iat[i]
+        #
+        #     # reset edge storage to current edge
+        #     current_node = comb[0]
+        #     adj_node_weights = []
+        #     adj_node_list = []
+        #
+        # # continuation of edge accumulation
+        # adj_node_list.append(comb[1])  # corresponding node to weight
+        # adj_node_weights.append(relation)  # corresponding weight
 
-            # reset edge storage to current edge
-            current_node = comb[0]
-            adj_node_weights = []
-            adj_node_list = []
+    # method 2: sort dataframe and create adjacency matrix of top n strongest relationships
+    edge_df = pd.DataFrame(list(zip(current_node_list, adj_node_list, adj_node_weights)), columns=["node1", "node2", "weight"])
+    edge_df = edge_df.sort_values(by="weight", ascending=False)
 
-        # continuation of edge accumulation
-        adj_node_list.append(comb[1])  # corresponding node to weight
-        adj_node_weights.append(relation)  # corresponding weight
+    # generate adjacency matrix
+    for index in range(0, 100) if len(edge_df) >= 50 else range(0, len(edge_df)): # n edges
+        rowdata = edge_df.iloc[index]
+        adj_mat[name_to_num[rowdata.node1], name_to_num[rowdata.node2]] = rowdata.weight
+        adj_mat[name_to_num[rowdata.node2], name_to_num[rowdata.node1]] = rowdata.weight # extra edge may be unnecessary
 
-    # account for last combination
-    adj_node_df = pd.Series(data=adj_node_weights, index=adj_node_list)
-    adj_node_df = adj_node_df.sort_values(ascending=False)
-
-    adj_mat[name_to_num[current_node], name_to_num[adj_node_df.index[0]]] = adj_node_df.iat[0]
-    adj_mat[name_to_num[adj_node_df.index[0]], name_to_num[current_node]] = adj_node_df.iat[0]
+    # method 1 cont.
+    # # account for last combination
+    # adj_node_df = pd.Series(data=adj_node_weights, index=adj_node_list)
+    # adj_node_df = adj_node_df.sort_values(ascending=False)
+    #
+    # adj_mat[name_to_num[current_node], name_to_num[adj_node_df.index[0]]] = adj_node_df.iat[0]
+    # adj_mat[name_to_num[adj_node_df.index[0]], name_to_num[current_node]] = adj_node_df.iat[0]
 
     print(adj_mat)
 
