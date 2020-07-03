@@ -1,4 +1,5 @@
 import time
+import os
 
 import json, ijson
 import string
@@ -20,6 +21,9 @@ from bokeh.embed import components
 
 import spacy
 from spacy.lang.en import English
+
+# custom files
+import parse_json
 
 # Takes in a list
 # Removes the word "Purpose" and punctuation
@@ -69,7 +73,7 @@ def rank_purpose(drug1_df):
 # helper function to find product names of a similar purpose
 # returns: list of similar product names
 def find_similar_products_purpose(drug1_df, original_purpose_list, original):
-    valid_df = drug1_df.dropna() # exclude all rows with columns of null
+    valid_df = drug1_df.dropna(subset=["id", "purpose", "brand_name", "indications_and_usage"]) # exclude all rows with columns of null
     valid_df = valid_df.loc[valid_df["id"] != original] # exclude self
 
     similar_products = set()
@@ -82,7 +86,7 @@ def find_similar_products_purpose(drug1_df, original_purpose_list, original):
 # returns: dictionary of product names and counts of matches
 def find_matching_indic(drug1_df, similar_products, original):
     nlp = English()
-    valid_df = drug1_df.dropna()  # exclude all rows with columns of null
+    valid_df = drug1_df.dropna(subset=["id", "purpose", "brand_name", "indications_and_usage"])  # exclude all rows with relevant columns of null
     valid_df = valid_df.loc[valid_df["id"] != original]  # exclude self
 
     # set original indications
@@ -107,73 +111,50 @@ def find_matching_indic(drug1_df, similar_products, original):
 # main
 def main():
     nlp = English()
-    # reading using ijson
-    t0 = time.time()
+    # parse and write
+    if not os.path.isfile("drug_df.zip"):
+        file_list = ["drug-label-0001-of-0008.json", "drug-label-0002-of-0008.json"]
+        parse_json.parse_and_write_zip(file_list)
 
-    drug1_df = pd.DataFrame(columns=["purpose", "id", "brand_name", "indications_and_usage"])
+    # read stored csv file
+    drug_df = parse_json.read_zip("drug_df.zip")
 
-    # loop over and read all information
-    file_list = ["drug-label-0001-of-0008.json", "drug-label-0002-of-0008.json"]
-
-    for filename in file_list:
-        current = []
-        current_temp = []
-        with open(filename) as file:
-            objects = ijson.items(file, "results.item")
-
-            # obtain information in a dataframe
-            for o in objects:
-                current_temp.append([o["purpose"][0] if "purpose" in o.keys() else None,
-                                   o["id"] if "id" in o.keys() else None,
-                                   o["openfda"]["brand_name"][0] if (
-                                               "openfda" in o.keys() and "brand_name" in o["openfda"].keys()) else None,
-                                   o["indications_and_usage"][0] if "indications_and_usage" in o.keys() else None])
-                current.append(o)
-
-        # compile master dataframe
-        current_df = pd.DataFrame(current_temp, columns=["purpose", "id", "brand_name", "indications_and_usage"])
-        drug1_df = pd.concat([drug1_df, current_df])
-
-    t1 = time.time()
-    print(t1 - t0)
-
-    # drug1 is a list of all viable objects
-    print(drug1_df) # how many drugs there are
+    print(drug_df) # verify read
 
     # use source: https://gist.github.com/deekayen/4148741 to eliminate mundane words
     with open("common_english.txt") as f:
         mundane = f.read().splitlines() # read without newline character
 
     # 1: generate key purposes
-    rank_purpose(drug1_df)
+    rank_purpose(drug_df)
 
-    print("Full length: ", str(len(drug1_df)))
+    print("Full length: ", str(len(drug_df)))
 
     # 2: Venn Diagram similarity between most similar drugs based on purpose keyword/indication matches
     # choose a drug
     original = "b3eebddf-53f5-4f30-a071-ad70152ee97a" # H. Pylori Plus
     # find drug purpose
-    original_purpose = drug1_df.loc[drug1_df["id"] == original, "purpose"].values[0]
+    original_purpose = drug_df.loc[drug_df["id"] == original, "purpose"].values[0]
     # find top purpose keyword
     original_purpose_list = clean_list(original_purpose, nlp)
 
     # find similar products by purpose
-    similar_products = find_similar_products_purpose(drug1_df, original_purpose_list, original)
+    similar_products = find_similar_products_purpose(drug_df, original_purpose_list, original)
 
     # within similar products, find matching indications for same-purpose medications
-    top_indic_df = find_matching_indic(drug1_df, similar_products, original)
+    top_indic_df = find_matching_indic(drug_df, similar_products, original)
 
     original_indic_set = set(
-        clean_list(drug1_df.loc[drug1_df["id"] == original, "indications_and_usage"].values[0], nlp))
+        clean_list(drug_df.loc[drug_df["id"] == original, "indications_and_usage"].values[0], nlp))
 
     print(top_indic_df)
 
     # plot top 3 by matching indications to original product
     plt.figure()
-    original_name = drug1_df.loc[drug1_df["id"] == original]["brand_name"].values[0]
+    original_name = drug_df.loc[drug_df["id"] == original]["brand_name"].values[0]
     venn = matplotlib_venn.venn3([original_indic_set,
-                                  set(clean_list(drug1_df.loc[drug1_df["id"] == top_indic_df.iloc[0]['ProductID'], "indications_and_usage"].values[0], nlp)),
-                                  set(clean_list(drug1_df.loc[drug1_df["id"] == top_indic_df.iloc[1]['ProductID'], "indications_and_usage"].values[0], nlp))],
+                                  set(clean_list(drug_df.loc[drug_df["id"] == top_indic_df.iloc[0]['ProductID'], "indications_and_usage"].values[0], nlp)),
+                                  set(clean_list(drug_df.loc[drug_df["id"] == top_indic_df.iloc[1]['ProductID'], "indications_and_usage"].values[0], nlp))],
                                   set_labels = [original_name, top_indic_df.iloc[0]['ProductName'], top_indic_df.iloc[1]['ProductName']])
     plt.title("Indication Word Matches in Common Purpose Product Labels", fontsize=10)
     plt.show()
@@ -183,7 +164,7 @@ def main():
     original_purpose = "sunscreen"
 
     # FUNC: find similar products by purpose as list
-    purpose_df = drug1_df.dropna()  # exclude all rows with columns of null
+    purpose_df = drug_df.dropna(subset=["id", "purpose", "brand_name", "indications_and_usage"])  # exclude all rows with columns of null
 
     print("Has all non-null: ", str(purpose_df.count(axis=0)))
 
@@ -194,7 +175,7 @@ def main():
 
     # using first product of selected purpose, find matching indications for same-purpose medications
     product_id = similar_products[0]
-    top_indic_df = find_matching_indic(drug1_df, similar_products[1:], product_id)
+    top_indic_df = find_matching_indic(drug_df, similar_products[1:], product_id)
 
     print(top_indic_df)
 
@@ -215,8 +196,8 @@ def main():
     for i, product_id in enumerate(itr_products):
         name_to_num[product_id] = i
         num_to_name[i] = product_id
-        attr_dict[product_id] = {"id": product_id, "name": drug1_df.loc[drug1_df["id"] == product_id]["brand_name"],
-        "purpose": drug1_df.loc[drug1_df["id"] == product_id]["purpose"]}
+        attr_dict[product_id] = {"id": product_id, "name": drug_df.loc[drug_df["id"] == product_id]["brand_name"],
+        "purpose": drug_df.loc[drug_df["id"] == product_id]["purpose"]}
 
     # generate graph with top n edges per node weighted by similarity
     # iterate through all combinations and find similarities
@@ -231,8 +212,8 @@ def main():
     # adj_node_list = []
 
     for comb in product_comb:
-        set1 = set(clean_list(drug1_df.loc[drug1_df["id"] == comb[0], "indications_and_usage"].values[0], nlp))
-        set2 = set(clean_list(drug1_df.loc[drug1_df["id"] == comb[1], "indications_and_usage"].values[0], nlp))
+        set1 = set(clean_list(drug_df.loc[drug_df["id"] == comb[0], "indications_and_usage"].values[0], nlp))
+        set2 = set(clean_list(drug_df.loc[drug_df["id"] == comb[1], "indications_and_usage"].values[0], nlp))
 
         # set weight of edges to reflect closeness of relationships (inverse)
         relation = len(set1.intersection(set2))
