@@ -9,6 +9,7 @@ import matplotlib_venn
 import itertools
 
 import numpy as np
+from collections import defaultdict
 import networkx as nx
 from bokeh.io import output_file, show
 from bokeh.models import (BoxZoomTool, Circle, HoverTool,
@@ -19,6 +20,9 @@ from bokeh.embed import components
 
 import spacy
 from spacy.lang.en import English
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
 
 # custom files
 import parse_json
@@ -346,35 +350,71 @@ def plot_adj_mat_heatmap(adj_mat, attr_dict, product_list):
 
 # main
 def main():
+    nlp = English()
     # file read and setup
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json"]
-    drug_df = parse_json.parse_or_read_drugs(json_list, "drug_df.zip")
+    drug_df = parse_json.parse_or_read_drugs(json_list, "full_drug_df.zip")
 
     print(drug_df) # verify read
 
     # 1: generate key purposes
-    rank_t0 = time.time()
-    rank_purpose(drug_df, 30)
-    print("Rank: ", str(time.time() - rank_t0))
-
-    print("Full length: ", str(len(drug_df)))
+    # rank_t0 = time.time()
+    # rank_purpose(drug_df, 30)
+    # print("Rank: ", str(time.time() - rank_t0))
+    #
+    # print("Full length: ", str(len(drug_df)))
 
     # 2.
-    drug_venn_t0 = time.time()
-    draw_venn(drug_df, "b3eebddf-53f5-4f30-a071-ad70152ee97a", "indications_and_usage")  # H. Pylori Plus
-    print("Drug Venn: ", str(time.time() - drug_venn_t0))
+    # drug_venn_t0 = time.time()
+    # draw_venn(drug_df, "b3eebddf-53f5-4f30-a071-ad70152ee97a", "indications_and_usage")  # H. Pylori Plus
+    # print("Drug Venn: ", str(time.time() - drug_venn_t0))
 
-    # 2b: Use purpose to find top products to compare
-    purpose_t0 = time.time()
-    similar_products = find_similar_drugs_from_purpose(drug_df, "analgesic", "indications_and_usage")
-    print("Purpose finding and matching indications: ", str(time.time() - purpose_t0))
+    # # 2b: Use purpose to find top products to compare
+    # purpose_t0 = time.time()
+    # similar_products = find_similar_drugs_from_purpose(drug_df, "analgesic", "indications_and_usage")
+    # print("Purpose finding and matching indications: ", str(time.time() - purpose_t0))
+    #
+    # # 3. Generate a graph node network of top products and their similarity to each other
+    # venn_G, adj_mat, attr_dict, name_to_num, num_to_name = generate_graph_matching_field_of_purpose(drug_df, similar_products, "analgesic", "indications_and_usage")
+    # plot_purpose_graph(venn_G)
+    #
+    # # 4: plot heatmap using adjacency matrix for all matches
+    # plot_adj_mat_heatmap(adj_mat, attr_dict, similar_products)
 
-    # 3. Generate a graph node network of top products and their similarity to each other
-    venn_G, adj_mat, attr_dict, name_to_num, num_to_name = generate_graph_matching_field_of_purpose(drug_df, similar_products, "analgesic", "indications_and_usage")
-    plot_purpose_graph(venn_G)
+    # 5. See what TF-IDF can do with respect to fields
+    purpose_drug_df = drug_df.dropna(subset = ["purpose"])
 
-    # 4: plot heatmap using adjacency matrix for all matches
-    plot_adj_mat_heatmap(adj_mat, attr_dict, similar_products)
+    purpose_list_t0 = time.time()
+    purpose_list = []
+    for index, row in purpose_drug_df.iterrows():
+        purpose_list.append(" ".join(clean_list(row["purpose"], nlp)))
+    print("Create purpose list: ", str(time.time() - purpose_list_t0))
+
+    tfidfv_t0 = time.time()
+    tfidfv = TfidfVectorizer()
+    X = tfidfv.fit_transform(purpose_list)
+    print("TF-IDF: ", str(time.time() - tfidfv_t0))
+
+    n_cluster = 30
+    km_t0 = time.time()
+    km = KMeans(n_clusters=n_cluster)
+    km.fit(X)
+    print("Fit KMeans: ", str(time.time() - km_t0))
+
+    print("Num KMeans labels: ", str(len(km.labels_)))
+
+    print("Top terms per cluster:")
+    order_centroids = km.cluster_centers_.argsort()[:, ::-1]
+    terms = tfidfv.get_feature_names()
+    for i in range(n_cluster):
+        top_ten_words = [terms[ind] for ind in order_centroids[i, :3]]
+        print("Cluster {}: {}".format(i, ' '.join(top_ten_words)))
+
+    print("Clusters with all names: ")
+    cluster_dict = defaultdict(list)
+    for i, label in enumerate(km.labels_):
+        cluster_dict[label].append(purpose_drug_df.iloc[i]["brand_name"])
+    print(cluster_dict)
 
 if __name__ == "__main__":
     main()
