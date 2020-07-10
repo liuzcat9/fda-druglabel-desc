@@ -54,5 +54,4 @@ crashlytics-build.properties
 # virtual environment
 venv/
 
-staticfiles
 .env
