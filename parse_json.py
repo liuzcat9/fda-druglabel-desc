@@ -1,23 +1,25 @@
-import time
+import time, os
 import ijson
 import pandas as pd
-import numpy as np
 
 # read stored csv file
 def read_zip(path):
     read_t0 = time.time()
-    read_df = pd.read_csv("drug_df.zip", compression="zip")
+    read_df = pd.read_csv(path, compression="zip")
     read_t1 = time.time()
     print("Read:", str(read_t1 - read_t0))
     return read_df
 
-def parse_and_write_zip(file_list):
+# parse json into csv (dataframes)
+def parse_zip(file_list):
     parse_t0 = time.time()
 
     df_cols = ["purpose", "id", "brand_name", "product_type", "route", "indications_and_usage", "contraindications"]
     drug_df = pd.DataFrame(columns=df_cols)
 
+    # extract wanted information from json files
     for filename in file_list:
+        print("Parsing: ", filename)
         current = []
         nested_current = []
         with open(filename) as file:
@@ -44,9 +46,27 @@ def parse_and_write_zip(file_list):
     parse_t1 = time.time()
     print("Parse:", str(parse_t1 - parse_t0))
 
+    return drug_df
+
+# write file to zip containing csv
+def write_zip(drug_df, path):
     write_t0 = time.time()
-    opts = dict(method="zip", archive_name="drug_df.csv")
-    drug_df.to_csv("drug_df.zip", compression=opts)
+    opts = dict(method="zip", archive_name=path.split('.')[0] + ".csv")
+    drug_df.to_csv(path, compression=opts)
     write_t1 = time.time()
 
     print("Write:", str(write_t1 - write_t0))
+
+# combines parse and write
+def parse_and_write_zip(file_list, path):
+    drug_df = parse_zip(file_list)
+    write_zip(drug_df, path)
+
+# combines read, parse, and write depending on files
+def parse_or_read_drugs(json_list, filename):
+    # parse and write if no file to read
+    if not os.path.isfile(filename):
+        parse_and_write_zip(json_list, filename)
+
+    # read stored csv file
+    return read_zip(filename)

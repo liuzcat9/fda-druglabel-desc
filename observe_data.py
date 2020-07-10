@@ -1,19 +1,10 @@
 import parse_json
-import os
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-def main():
-    # parse and write
-    if not os.path.isfile("drug_df.zip"):
-        file_list = ["drug-label-0001-of-0008.json", "drug-label-0002-of-0008.json"]
-        parse_json.parse_and_write_zip(file_list)
-
-    # read stored csv file
-    drug_df = parse_json.read_zip("drug_df.zip")
-
+def plot_product_type(drug_df):
     # plot OTC/Prescription/NaN
     product_type_counts = drug_df["product_type"].value_counts()
     percentages = [num / len(drug_df.index) * 100.0 for index, num in product_type_counts.items()]
@@ -25,6 +16,14 @@ def main():
     plt.pie(percentages, labels=labels, autopct='%1.1f%%')
     plt.title("Distribution of OTC/Prescription/Unlisted Drugs in Subset")
     plt.show()
+
+def main():
+    json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
+                 "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
+                 "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
+    drug_df = parse_json.parse_or_read_drugs(json_list, "full_drug_df.zip")
+
+    plot_product_type(drug_df)
 
     # test output
     print(drug_df.isnull().any(axis=0))
