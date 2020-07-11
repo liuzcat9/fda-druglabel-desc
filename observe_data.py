@@ -17,6 +17,9 @@ def plot_product_type(drug_df):
     plt.title("Distribution of OTC/Prescription/Unlisted Drugs in Subset")
     plt.show()
 
+def test_observation():
+    return list(np.arange(9))
+
 def main():
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
                  "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",

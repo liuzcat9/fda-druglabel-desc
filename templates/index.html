@@ -7,6 +7,9 @@
 <body>
 {% block content %}
 <p>This is the index</p>
+{% for ob in obs %}
+<li>{{ ob }}</li>
+{% endfor %}
 {% endblock %}
 </body>
 </html>
