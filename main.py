@@ -23,6 +23,7 @@ from spacy.lang.en import English
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 # custom files
 import parse_json
@@ -353,7 +354,7 @@ def main():
     nlp = English()
     # file read and setup
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json"]
-    drug_df = parse_json.parse_or_read_drugs(json_list, "full_drug_df.zip")
+    drug_df = parse_json.parse_or_read_drugs(json_list, "drug_df.zip")
 
     print(drug_df) # verify read
 
@@ -390,31 +391,42 @@ def main():
         purpose_list.append(" ".join(clean_list(row["purpose"], nlp)))
     print("Create purpose list: ", str(time.time() - purpose_list_t0))
 
+    # TF-IDF
     tfidfv_t0 = time.time()
     tfidfv = TfidfVectorizer()
     X = tfidfv.fit_transform(purpose_list)
     print("TF-IDF: ", str(time.time() - tfidfv_t0))
 
-    n_cluster = 30
-    km_t0 = time.time()
-    km = KMeans(n_clusters=n_cluster)
-    km.fit(X)
-    print("Fit KMeans: ", str(time.time() - km_t0))
+    # collect average scores
+    avg_silhouettes = {}
+    avg_inertias = {}
+    # find ideal number of clusters
+    for n_clusters in range(8, 30, 1):
+        n_trials = 5
+        sum_sil = 0
+        sum_inert = 0
+        # conduct multiple trials per n_clusters
+        for trial in range(n_trials):
+            km = KMeans(n_clusters=n_clusters)
+            km.fit(X)
 
-    print("Num KMeans labels: ", str(len(km.labels_)))
+            # Calculate the mean silhouette coefficient for the number of clusters chosen
+            sum_sil += silhouette_score(X, km.predict(X), metric='euclidean')
+            sum_inert += km.inertia_
 
-    print("Top terms per cluster:")
-    order_centroids = km.cluster_centers_.argsort()[:, ::-1]
-    terms = tfidfv.get_feature_names()
-    for i in range(n_cluster):
-        top_ten_words = [terms[ind] for ind in order_centroids[i, :3]]
-        print("Cluster {}: {}".format(i, ' '.join(top_ten_words)))
+        avg_silhouettes[n_clusters] = sum_sil / n_trials
+        avg_inertias[n_clusters] = sum_inert / n_trials
+        print("Calculated for", str(n_clusters), "clusters:", avg_silhouettes[n_clusters])
 
-    print("Clusters with all names: ")
-    cluster_dict = defaultdict(list)
-    for i, label in enumerate(km.labels_):
-        cluster_dict[label].append(purpose_drug_df.iloc[i]["brand_name"])
-    print(cluster_dict)
+    fig, ax = plt.subplots(1, 2)
+    ax[0].plot(*zip(*list(avg_inertias.items())))
+    ax[1].plot(*zip(*list(avg_silhouettes.items())))
+
+    ax[0].title.set_text("Inertias")
+    ax[1].title.set_text("Silhouettes")
+
+
+
 
 if __name__ == "__main__":
     main()
