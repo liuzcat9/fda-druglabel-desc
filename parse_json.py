@@ -5,7 +5,7 @@ import pandas as pd
 # read stored csv file
 def read_zip(path):
     read_t0 = time.time()
-    read_df = pd.read_csv(path, compression="zip")
+    read_df = pd.read_csv(path + ".zip", compression="zip")
     read_t1 = time.time()
     print("Read:", str(read_t1 - read_t0))
     return read_df
@@ -14,7 +14,10 @@ def read_zip(path):
 def parse_zip(file_list):
     parse_t0 = time.time()
 
-    df_cols = ["purpose", "id", "brand_name", "product_type", "route", "indications_and_usage", "contraindications"]
+    df_cols = ["purpose", "id", "package_label_principal_display_panel",
+               "active_ingredient", "inactive_ingredient", "warnings",
+               "brand_name", "product_type", "route",
+               "dosage_and_administration", "indications_and_usage", "contraindications"]
     drug_df = pd.DataFrame(columns=df_cols)
 
     # extract wanted information from json files
@@ -30,10 +33,15 @@ def parse_zip(file_list):
             for o in objects:
                 nested_current.append([o["purpose"][0] if "purpose" in o.keys() else None,
                                        o["id"] if "id" in o.keys() else None,
+                                       o["package_label_principal_display_panel"][0] if "package_label_principal_display_panel" in o.keys() else None,
+                                       o["active_ingredient"][0] if "active_ingredient" in o.keys() else None,
+                                       o["inactive_ingredient"][0] if "inactive_ingredient" in o.keys() else None,
+                                       o["warnings"][0] if "warnings" in o.keys() else None,
                                        o["openfda"]["brand_name"][0] if ("brand_name" in o["openfda"].keys()) else None,
                                        o["openfda"]["product_type"][0] if "product_type" in o[
                                            "openfda"].keys() else None,
                                        o["openfda"]["route"][0] if "route" in o["openfda"].keys() else None,
+                                       o["dosage_and_administration"][0] if "dosage_and_administration" in o.keys() else None,
                                        o["indications_and_usage"][0] if "indications_and_usage" in o.keys() else None,
                                        o["contraindications"][0] if "contraindications" in o.keys() else None])
 
@@ -51,8 +59,8 @@ def parse_zip(file_list):
 # write file to zip containing csv
 def write_zip(drug_df, path):
     write_t0 = time.time()
-    opts = dict(method="zip", archive_name=path.split('.')[0] + ".csv")
-    drug_df.to_csv(path, compression=opts)
+    opts = dict(method="zip", archive_name=path + ".csv")
+    drug_df.to_csv(path + ".zip", compression=opts)
     write_t1 = time.time()
 
     print("Write:", str(write_t1 - write_t0))
@@ -63,10 +71,25 @@ def parse_and_write_zip(file_list, path):
     write_zip(drug_df, path)
 
 # combines read, parse, and write depending on files
-def parse_or_read_drugs(json_list, filename):
-    # parse and write if no file to read
-    if not os.path.isfile(filename):
-        parse_and_write_zip(json_list, filename)
+def parse_or_read_drugs(json_list, filename, filetype="pickle"):
+    if filetype == "csv":
+        # parse and write if no file to read
+        if not os.path.isfile(filename + ".zip"):
+            parse_and_write_zip(json_list, filename)
 
-    # read stored csv file
-    return read_zip(filename)
+        # read stored csv file
+        return read_zip(filename)
+    else:
+        if not os.path.isfile(filename + ".zip"):
+            drug_df = parse_zip(json_list)
+
+            # serialize file
+            write_t0 = time.time()
+            drug_df.to_pickle(filename + ".pkl", compression="zip")
+            print("Write: ", str(time.time() - write_t0))
+
+        # read file
+        read_t0 = time.time()
+        read_df = pd.read_pickle(filename + ".pkl", compression="zip")
+        print("Read: ", str(time.time() - read_t0))
+        return read_df
