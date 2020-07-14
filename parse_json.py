@@ -31,7 +31,8 @@ def parse_zip(file_list):
             # read wanted information into dataframe
             # openfda is in every entry of subset of data
             for o in objects:
-                nested_current.append([o["purpose"][0] if "purpose" in o.keys() else None,
+                if "purpose" in o.keys(): # all represented data should have a purpose field
+                    nested_current.append([o["purpose"][0],
                                        o["id"] if "id" in o.keys() else None,
                                        o["package_label_principal_display_panel"][0] if "package_label_principal_display_panel" in o.keys() else None,
                                        o["active_ingredient"][0] if "active_ingredient" in o.keys() else None,
@@ -80,7 +81,7 @@ def parse_or_read_drugs(json_list, filename, filetype="pickle"):
         # read stored csv file
         return read_zip(filename)
     else:
-        if not os.path.isfile(filename + ".zip"):
+        if not os.path.isfile(filename + ".pkl"):
             drug_df = parse_zip(json_list)
 
             # serialize file
