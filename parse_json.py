@@ -17,6 +17,7 @@ def parse_zip(file_list):
     df_cols = ["purpose", "id", "package_label_principal_display_panel",
                "active_ingredient", "inactive_ingredient", "warnings",
                "brand_name", "product_type", "route",
+               "mechanism_of_action", "clinical_pharmacology",
                "dosage_and_administration", "indications_and_usage", "contraindications"]
     drug_df = pd.DataFrame(columns=df_cols)
 
@@ -42,6 +43,8 @@ def parse_zip(file_list):
                                        o["openfda"]["product_type"][0] if "product_type" in o[
                                            "openfda"].keys() else None,
                                        o["openfda"]["route"][0] if "route" in o["openfda"].keys() else None,
+                                        o["mechanism_of_action"] if "mechanism_of_action" in o.keys() else None,
+                                           o["clinical_pharmacology"] if "clinical_pharmacology" in o.keys() else None,
                                        o["dosage_and_administration"][0] if "dosage_and_administration" in o.keys() else None,
                                        o["indications_and_usage"][0] if "indications_and_usage" in o.keys() else None,
                                        o["contraindications"][0] if "contraindications" in o.keys() else None])
@@ -54,6 +57,9 @@ def parse_zip(file_list):
 
     parse_t1 = time.time()
     print("Parse:", str(parse_t1 - parse_t0))
+
+    print("Parsed: ")
+    print(drug_df["product_type"])
 
     return drug_df
 
