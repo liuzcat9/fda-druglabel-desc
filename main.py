@@ -350,22 +350,27 @@ def plot_adj_mat_heatmap(adj_mat, attr_dict, product_list):
     plt.show()
 
 # sklearn purpose cluster: top terms per cluster
-def print_top_cluster_terms(tfidfv, km, n_cluster):
+def obtain_top_cluster_terms(tfidfv, km, n_cluster):
     print("Top terms per cluster:")
     order_centroids = km.cluster_centers_.argsort()[:, ::-1]
     terms = tfidfv.get_feature_names()
+    cluster_list = []
     for i in range(n_cluster):
-        top_ten_words = [terms[ind] for ind in order_centroids[i, :5]]
-        print("Cluster {}: {}".format(i, ' '.join(top_ten_words)))
+        top_words = [terms[ind] for ind in order_centroids[i, :5]]
+        print("Cluster {}: {}".format(i, " ".join(top_words)))
+        cluster_list.append(" ".join(top_words))
+
+    return cluster_list
 
 # sklearn purpose cluster: all names per cluster
-def cluster_groups_to_df(drug_df, km):
+def cluster_groups_to_df(drug_df, km, cluster_list):
     print("Clusters with all names: ")
-    cluster_dict = defaultdict(list)
+    cluster_col = []
     for i, label in enumerate(km.labels_):
-        cluster_dict[label].append(drug_df.iloc[i]["brand_name"])
-    sorted_clusters = pd.DataFrame.from_dict(cluster_dict, orient="index").transpose()
-    print(sorted_clusters.iloc[:100, :].head())
+        cluster_col.append(cluster_list[label])
+
+    drug_df["purpose_cluster"] = cluster_col
+    print(len(drug_df), len(cluster_col))
 
 # main
 def main():
@@ -382,18 +387,18 @@ def main():
     print(drug_df.head()) # verify read
     print(str(len(drug_df)), "rows")
 
-    # 1: generate key purposes
+    # # 1: generate key purposes
     # rank_t0 = time.time()
     # rank_purpose(drug_df, 30)
     # print("Rank: ", str(time.time() - rank_t0))
     #
     # print("Full length: ", str(len(drug_df)))
-
+    #
     # 2.
     # drug_venn_t0 = time.time()
     # draw_venn(drug_df, "b3eebddf-53f5-4f30-a071-ad70152ee97a", "indications_and_usage")  # H. Pylori Plus
     # print("Drug Venn: ", str(time.time() - drug_venn_t0))
-
+    #
     # # 2b: Use purpose to find top products to compare
     # purpose_t0 = time.time()
     # similar_products = find_similar_drugs_from_purpose(drug_df, "analgesic", "indications_and_usage")
@@ -405,7 +410,7 @@ def main():
     #
     # # 4: plot heatmap using adjacency matrix for all matches
     # plot_adj_mat_heatmap(adj_mat, attr_dict, similar_products)
-
+    #
     # 5. See what TF-IDF can do with respect to fields
     purpose_list_t0 = time.time()
     purpose_list = []
@@ -419,7 +424,7 @@ def main():
     X = tfidfv.fit_transform(purpose_list)
     print("TF-IDF: ", str(time.time() - tfidfv_t0))
 
-    n_clusters = [32, 50]
+    n_clusters = [32]
     for n_cluster in n_clusters:
         km_t0 = time.time()
         km = KMeans(n_clusters=n_cluster)
@@ -428,9 +433,11 @@ def main():
 
         print("Num KMeans labels: ", str(len(km.labels_)))
 
-        print_top_cluster_terms(tfidfv, km, n_cluster)
+        cluster_list = obtain_top_cluster_terms(tfidfv, km, n_cluster)
 
-        cluster_groups_to_df(drug_df, km)
+        cluster_groups_to_df(drug_df, km, cluster_list)
+
+    print(drug_df["purpose_cluster"])
 
 if __name__ == "__main__":
     main()
