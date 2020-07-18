@@ -21,8 +21,9 @@
         </select>
     </div>
     <div class="form-group">
-        <button type="submit" class="btn btn-secondary">Submit</button>
+        <button type="submit" class="btn btn-secondary" onclick="$('#loading').show();">Submit</button>
     </div>
 </form>
 
+<div id="loading" style="display:none;"><img src="{{ url_for('static', filename='loading.gif') }}" alt="" />Loading!</div>
 {% endblock %}
