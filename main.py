@@ -164,7 +164,7 @@ def find_matching_field_for_product(drug_df, similar_products, original, field):
 def generate_graph_matching_field_of_purpose(drug_df, similar_products, original_purpose, field):
     permute_t0 = time.time()
     product_comb = itertools.combinations(similar_products, 2)  # convert permutations of product names into list
-    print("Permutations: ", str(time.time() - permute_t0))
+    print("Combinations: ", str(time.time() - permute_t0))
 
     attr_t0 = time.time()
     name_to_num, num_to_name, attr_dict = generate_attr_mappings(drug_df, similar_products)
@@ -309,12 +309,14 @@ def plot_purpose_graph(venn_G):
 
     plot.renderers.append(graph)
 
-    # script, div = components(plot)
-    # print(script)
-    # print(div)
+    script, div = components(plot)
+    print(script)
+    print(div)
 
     output_file("networkx_graph.html")
     show(plot)
+
+    return script, div
 
 # 4. Heatmap form of adjacency matrix, full and small
 def plot_adj_mat_heatmap(adj_mat, attr_dict, product_list):
@@ -348,7 +350,7 @@ def plot_adj_mat_heatmap(adj_mat, attr_dict, product_list):
 def main():
     # file read and setup
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json"]
-    drug_df = parse_json.parse_or_read_drugs(json_list, "drug_df.zip")
+    drug_df = parse_json.parse_or_read_drugs(json_list, "drug_df", "pickle")
 
     print(drug_df) # verify read
 
@@ -361,7 +363,7 @@ def main():
 
     # 2.
     drug_venn_t0 = time.time()
-    draw_venn(drug_df, "b3eebddf-53f5-4f30-a071-ad70152ee97a", "indications_and_usage")  # H. Pylori Plus
+    draw_venn(drug_df, "85244a4b-c688-43f2-b3a4-f659943827a1", "indications_and_usage")  # BENZALKONIUM CHLORIDE
     print("Drug Venn: ", str(time.time() - drug_venn_t0))
 
     # 2b: Use purpose to find top products to compare

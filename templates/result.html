@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block content %}
+<p><b>Purpose:</b> {{ purpose }}</p>
+<p><b>Field:</b> {{ field }}</p>
+
+{{ bokeh_div | safe }}
+{{ bokeh_script | safe }}
+
+{% endblock %}
