@@ -349,14 +349,38 @@ def plot_adj_mat_heatmap(adj_mat, attr_dict, product_list):
     fig.tight_layout()
     plt.show()
 
+# sklearn purpose cluster: top terms per cluster
+def print_top_cluster_terms(tfidfv, km, n_cluster):
+    print("Top terms per cluster:")
+    order_centroids = km.cluster_centers_.argsort()[:, ::-1]
+    terms = tfidfv.get_feature_names()
+    for i in range(n_cluster):
+        top_ten_words = [terms[ind] for ind in order_centroids[i, :5]]
+        print("Cluster {}: {}".format(i, ' '.join(top_ten_words)))
+
+# sklearn purpose cluster: all names per cluster
+def cluster_groups_to_df(drug_df, km):
+    print("Clusters with all names: ")
+    cluster_dict = defaultdict(list)
+    for i, label in enumerate(km.labels_):
+        cluster_dict[label].append(drug_df.iloc[i]["brand_name"])
+    sorted_clusters = pd.DataFrame.from_dict(cluster_dict, orient="index").transpose()
+    print(sorted_clusters.iloc[:100, :].head())
+
 # main
 def main():
     nlp = English()
     # file read and setup
-    json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json"]
-    drug_df = parse_json.parse_or_read_drugs(json_list, "drug_df.zip")
+    json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
+                "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
+                "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
+    drug_df = parse_json.parse_or_read_drugs(json_list, "full_drug_df", "pickle")
 
-    print(drug_df) # verify read
+    pd.set_option('display.max_rows', 50)
+    pd.set_option('display.max_columns', 50)
+
+    print(drug_df.head()) # verify read
+    print(str(len(drug_df)), "rows")
 
     # 1: generate key purposes
     # rank_t0 = time.time()
@@ -383,11 +407,9 @@ def main():
     # plot_adj_mat_heatmap(adj_mat, attr_dict, similar_products)
 
     # 5. See what TF-IDF can do with respect to fields
-    purpose_drug_df = drug_df.dropna(subset = ["purpose"])
-
     purpose_list_t0 = time.time()
     purpose_list = []
-    for index, row in purpose_drug_df.iterrows():
+    for index, row in drug_df.iterrows():
         purpose_list.append(" ".join(clean_list(row["purpose"], nlp)))
     print("Create purpose list: ", str(time.time() - purpose_list_t0))
 
@@ -397,36 +419,18 @@ def main():
     X = tfidfv.fit_transform(purpose_list)
     print("TF-IDF: ", str(time.time() - tfidfv_t0))
 
-    # collect average scores
-    avg_silhouettes = {}
-    avg_inertias = {}
-    # find ideal number of clusters
-    for n_clusters in range(8, 30, 1):
-        n_trials = 5
-        sum_sil = 0
-        sum_inert = 0
-        # conduct multiple trials per n_clusters
-        for trial in range(n_trials):
-            km = KMeans(n_clusters=n_clusters)
-            km.fit(X)
+    n_clusters = [32, 50]
+    for n_cluster in n_clusters:
+        km_t0 = time.time()
+        km = KMeans(n_clusters=n_cluster)
+        km.fit(X)
+        print("Fit KMeans: ", str(time.time() - km_t0))
 
-            # Calculate the mean silhouette coefficient for the number of clusters chosen
-            sum_sil += silhouette_score(X, km.predict(X), metric='euclidean')
-            sum_inert += km.inertia_
+        print("Num KMeans labels: ", str(len(km.labels_)))
 
-        avg_silhouettes[n_clusters] = sum_sil / n_trials
-        avg_inertias[n_clusters] = sum_inert / n_trials
-        print("Calculated for", str(n_clusters), "clusters:", avg_silhouettes[n_clusters])
+        print_top_cluster_terms(tfidfv, km, n_cluster)
 
-    fig, ax = plt.subplots(1, 2)
-    ax[0].plot(*zip(*list(avg_inertias.items())))
-    ax[1].plot(*zip(*list(avg_silhouettes.items())))
-
-    ax[0].title.set_text("Inertias")
-    ax[1].title.set_text("Silhouettes")
-
-
-
+        cluster_groups_to_df(drug_df, km)
 
 if __name__ == "__main__":
     main()
