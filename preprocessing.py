@@ -68,8 +68,7 @@ def preprocess_and_write_df(raw_drug_df, filename):
     print(drug_df["purpose"])
     print(drug_df["indications_and_usage"])
 
-    # perform purpose clustering using cleaned lists
-    drug_df = cluster_purpose(drug_df)
+    # write a non-clustered column dataframe for easy testing
     write_preprocessed_to_pkl(drug_df, filename)
 
 ## sklearn
