@@ -164,6 +164,7 @@ def generate_graph_matching_field_of_purpose(drug_df, similar_products, original
     purpose_df = purpose_df.reset_index()
 
     field_list = purpose_df[field].tolist()
+    print(field_list[0:10])
 
     # method of representation: TF-IDF
     tfidfv = TfidfVectorizer()
@@ -260,7 +261,7 @@ def plot_purpose_graph(venn_G):
     graph.edge_renderer.glyph.line_width = {'field': 'line_width'}
 
     # graph settings
-    graph.node_renderer.glyph = Circle(size=15, fill_color="blue")
+    graph.node_renderer.glyph = Circle(size=15, fill_color="pink")
     graph.edge_renderer.hover_glyph = MultiLine(line_color="red", line_width={'field': 'line_width'})
     graph.inspection_policy = NodesAndLinkedEdges()
 
@@ -321,11 +322,11 @@ def main():
 
     # 2b: Use purpose to find top products to compare
     full_graph_t0 = time.time()
-    similar_products = find_similar_drugs_from_purpose(drug_df, "topical analgesic menthol suppressant cough", "indications_and_usage")
+    similar_products = find_similar_drugs_from_purpose(drug_df, "sanitizer", "indications_and_usage")
 
     # 3. Generate a graph node network of top products and their similarity to each other
     venn_G, adj_mat, attr_dict, num_to_name = \
-        generate_graph_matching_field_of_purpose(drug_df, similar_products, "topical analgesic menthol suppressant cough", "indications_and_usage")
+        generate_graph_matching_field_of_purpose(drug_df, similar_products, "sanitizer", "indications_and_usage")
 
     print("Time to build graph:", str(time.time() - full_graph_t0))
     plot_purpose_graph(venn_G)

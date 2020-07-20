@@ -25,7 +25,8 @@ def tokenize_columns(drug_df):
     tokenize_t0 = time.time()
     nlp = English()
 
-    columns_to_tokenize = ["purpose", "indications_and_usage"]
+    columns_to_tokenize = ["purpose", "active_ingredient", "inactive_ingredient", "warnings", "mechanism_of_action",
+                           "dosage_and_administration", "indications_and_usage", "contraindications"]
     for column in columns_to_tokenize:
         new_col = []
         old_col = drug_df[column].tolist()
