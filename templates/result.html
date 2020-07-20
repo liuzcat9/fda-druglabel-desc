@@ -4,7 +4,8 @@
 <p><b>Purpose:</b> {{ purpose }}</p>
 <p><b>Field:</b> {{ field }}</p>
 
-{{ bokeh_div | safe }}
-{{ bokeh_script | safe }}
+<div class="embed-responsive embed-responsive-4by3">
+    <iframe class="embed-responsive-item" src="{{ url_for('static', filename='') }}{{ embed }}"></iframe>
+</div>
 
 {% endblock %}

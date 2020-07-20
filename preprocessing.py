@@ -20,7 +20,6 @@ def clean_list(purpose_str, nlp):
     return cleaned_list
 
 # Uses spacy to clean all words in all relevant columns
-# TODO: current columns cleaned: purpose, indications_and_usage
 def tokenize_columns(drug_df):
     tokenize_t0 = time.time()
     nlp = English()

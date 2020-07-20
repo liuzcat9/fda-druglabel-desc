@@ -15,7 +15,7 @@ from bokeh.models import (BoxZoomTool, Circle, HoverTool,
                           MultiLine, Plot, Range1d, ResetTool,
                           NodesAndLinkedEdges, EdgesAndLinkedNodes)
 from bokeh.plotting import figure, from_networkx
-from bokeh.embed import components
+from bokeh.embed import components, file_html
 
 import spacy
 from spacy.lang.en import English
@@ -244,7 +244,7 @@ def generate_purpose_graph(sparse_mat, attr_dict, num_to_name):
     return venn_G
 
 # plot graph of drugs in a particular purpose (bokeh)
-def plot_purpose_graph(venn_G):
+def generate_graph_plot(venn_G, purpose, field):
     # Display the network graph from the venn diagram interactions
     plot = figure(title="Network of Top Similar Drugs by Indications and Usage", x_range=(-5, 5), y_range=(-5, 5),
                   tools="pan,lasso_select,box_select", toolbar_location="right")
@@ -269,8 +269,8 @@ def plot_purpose_graph(venn_G):
 
     script, div = components(plot)
 
-    output_file("networkx_graph.html")
-    # show(plot)
+    output_file("static/" + purpose + "-" + field + ".html")
+    show(plot)
 
     return script, div
 
@@ -320,19 +320,26 @@ def main():
     # 2.
     draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
 
-    # 2b: Use purpose to find top products to compare
-    full_graph_t0 = time.time()
-    similar_products = find_similar_drugs_from_purpose(drug_df, "sanitizer", "indications_and_usage")
+    # 3b. Automate process to obtain node network graphs of purpose_field combinations
+    purposes = ["sunscreen", "analgesic", "antiseptic"]
+    fields = ["indications_and_usage", "warnings"]
 
-    # 3. Generate a graph node network of top products and their similarity to each other
-    venn_G, adj_mat, attr_dict, num_to_name = \
-        generate_graph_matching_field_of_purpose(drug_df, similar_products, "sanitizer", "indications_and_usage")
+    for purpose in purposes:
+        for field in fields:
+            # 2b: Use purpose to find top products to compare
+            full_graph_t0 = time.time()
+            similar_products = find_similar_drugs_from_purpose(drug_df, purpose, field)
 
-    print("Time to build graph:", str(time.time() - full_graph_t0))
-    plot_purpose_graph(venn_G)
-    print("Time to generate graph:", str(time.time() - full_graph_t0))
+            # 3. Generate a graph node network of top products and their similarity to each other
+            venn_G, adj_mat, attr_dict, num_to_name = \
+                generate_graph_matching_field_of_purpose(drug_df, similar_products, purpose, field)
+
+            print("Time to build graph:", str(time.time() - full_graph_t0))
+            generate_graph_plot(venn_G, purpose, field)
+            print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
     # 4: plot heatmap using adjacency matrix for all matches
+    # TODO: fix name reference
     plot_adj_mat_heatmap(adj_mat, attr_dict, similar_products)
 
 if __name__ == "__main__":
