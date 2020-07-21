@@ -13,7 +13,7 @@ def read_zip(path):
     print("Read:", str(read_t1 - read_t0))
     return read_df
 
-# parse json into csv (dataframes)
+# parse json into dataframe
 def parse_zip(file_list):
     parse_t0 = time.time()
 
@@ -81,30 +81,30 @@ def parse_and_write_zip(file_list, path):
 def parse_and_read_drugs(json_list, filename, filetype="pickle"):
     if filetype == "csv":
         # parse and write if no file to read
-        if not os.path.isfile(filename + ".zip"):
+        if not os.path.isfile("pkl/" + filename + ".zip"):
             parse_and_write_zip(json_list, filename)
 
         # read stored csv file
         return read_zip(filename)
     else:
-        if not os.path.isfile(filename + ".pkl"):
+        if not os.path.isfile("pkl/" + filename + ".pkl"):
             drug_df = parse_zip(json_list)
 
             # serialize file
             write_t0 = time.time()
-            drug_df.to_pickle(filename + ".pkl", compression="zip")
+            drug_df.to_pickle("pkl/" + filename + ".pkl", compression="zip")
             print("Write: ", str(time.time() - write_t0))
 
         # read file
         read_t0 = time.time()
-        read_df = pd.read_pickle(filename + ".pkl", compression="zip")
+        read_df = pd.read_pickle("pkl/" + filename + ".pkl", compression="zip")
         print("Read: ", str(time.time() - read_t0))
         return read_df
 
 # choose preprocessed or raw drug files to sift through, ultimately returning preprocessed drug_df
 def obtain_preprocessed_drugs(json_list, filename):
     # no preprocessed drugs, start from raw
-    if not os.path.isfile(filename + ".pkl"):
+    if not os.path.isfile("pkl/" + filename + ".pkl"):
         rawfile = filename.replace("purpose_", "")
         raw_drug_df = parse_and_read_drugs(json_list, rawfile, "pickle")
 

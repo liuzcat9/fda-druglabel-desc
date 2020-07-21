@@ -44,13 +44,13 @@ def tokenize_columns(drug_df):
 # write cleaned dataset
 def write_preprocessed_to_pkl(drug_df, filename):
     write_t0 = time.time()
-    drug_df.to_pickle(filename + ".pkl", compression="zip")
+    drug_df.to_pickle("pkl/" + filename + ".pkl", compression="zip")
     print("Write preprocessed:", time.time() - write_t0)
 
 # read cleaned dataset into dataframe
 def read_preprocessed_to_pkl(filename):
     read_t0 = time.time()
-    drug_df = pd.read_pickle(filename + ".pkl", compression="zip")
+    drug_df = pd.read_pickle("pkl/" + filename + ".pkl", compression="zip")
     print("Read preprocessed:", time.time() - read_t0)
     return drug_df
 
