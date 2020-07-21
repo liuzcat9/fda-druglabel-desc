@@ -5,7 +5,8 @@
 <p><b>Field:</b> {{ field }}</p>
 
 <div class="embed-responsive embed-responsive-4by3">
-    <iframe class="embed-responsive-item" src="{{ url_for('static', filename='') }}{{ embed }}"></iframe>
+    <iframe class="embed-responsive-item"
+            src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_file }}"></iframe>
 </div>
 
 {% endblock %}

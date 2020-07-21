@@ -110,13 +110,13 @@ def cluster_purpose(drug_df):
 
     # KMeans
     km_t0 = time.time()
-    km = KMeans(n_clusters=32)
+    km = KMeans(n_clusters=50)
     km.fit(X)
     print("Fit KMeans: ", str(time.time() - km_t0))
 
     print("Num KMeans labels: ", str(len(km.labels_)))
 
-    cluster_list = obtain_top_cluster_terms(tfidfv, km, 32)
+    cluster_list = obtain_top_cluster_terms(tfidfv, km, 50)
 
     cluster_groups_to_df(drug_df, km, cluster_list)
 

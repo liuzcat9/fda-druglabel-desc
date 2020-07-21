@@ -25,7 +25,7 @@ def result():
 
         print("File retrieved should be:", output_file)
 
-    return render_template('result.html', purpose=purpose, field=field, embed=output_file)
+    return render_template('result.html', purpose=purpose, field=field, output_file=output_file)
 
 if __name__ == '__main__':
     app.run(port=33507, debug=True)
