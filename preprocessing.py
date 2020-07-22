@@ -20,12 +20,10 @@ def clean_list(purpose_str, nlp):
     return cleaned_list
 
 # Uses spacy to clean all words in all relevant columns
-def tokenize_columns(drug_df):
+def tokenize_columns(drug_df, columns_to_tokenize):
     tokenize_t0 = time.time()
     nlp = English()
 
-    columns_to_tokenize = ["purpose", "active_ingredient", "inactive_ingredient", "warnings", "mechanism_of_action",
-                           "dosage_and_administration", "indications_and_usage", "contraindications"]
     for column in columns_to_tokenize:
         new_col = []
         old_col = drug_df[column].tolist()
@@ -63,7 +61,9 @@ def preprocess_and_write_df(raw_drug_df, filename):
     print(str(len(raw_drug_df)), "rows")
 
     # clean lists first
-    drug_df = tokenize_columns(raw_drug_df)
+    columns_to_tokenize = ["purpose", "active_ingredient", "inactive_ingredient", "warnings", "mechanism_of_action",
+                           "dosage_and_administration", "indications_and_usage", "contraindications"]
+    drug_df = tokenize_columns(raw_drug_df, columns_to_tokenize)
     print(drug_df["purpose"])
     print(drug_df["indications_and_usage"])
 

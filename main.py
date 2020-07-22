@@ -170,6 +170,7 @@ def generate_graph_matching_field_of_purpose(drug_df, similar_products, original
     tfidfv = TfidfVectorizer()
     fieldX = tfidfv.fit_transform(field_list)
     print("TF-IDF Field: ", str(time.time() - tfidfv_t0))
+    print(fieldX.shape)
 
     print(purpose_df)
 
@@ -179,6 +180,8 @@ def generate_graph_matching_field_of_purpose(drug_df, similar_products, original
     # print("cosine_similarity:", str(time.time() - cos_sim_t0)) # slightly more inefficient
     lin_kern_t0 = time.time()
     adj_mat = linear_kernel(fieldX, fieldX)
+    # avoid redundant information and send networkx only lower triangle
+    adj_mat = np.tril(adj_mat)
     np.fill_diagonal(adj_mat, 0) # mask 1's (field similarity to itself)
     print("linear_kernel:", str(time.time() - lin_kern_t0))
 
@@ -321,7 +324,7 @@ def main():
     draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
 
     # 3b. Automate process to obtain node network graphs of purpose_field combinations
-    purposes = ["sunscreen", "analgesic", "antiseptic"]
+    purposes = ["sunscreen purposes uses protectant skin"]
     fields = ["indications_and_usage", "warnings"]
 
     for purpose in purposes:
