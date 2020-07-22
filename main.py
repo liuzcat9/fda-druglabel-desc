@@ -180,6 +180,10 @@ def generate_graph_matching_field_of_purpose(drug_df, similar_products, original
     # print("cosine_similarity:", str(time.time() - cos_sim_t0)) # slightly more inefficient
     lin_kern_t0 = time.time()
     adj_mat = linear_kernel(fieldX, fieldX)
+
+    # add weights now
+    adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
+
     # avoid redundant information and send networkx only lower triangle
     adj_mat = np.tril(adj_mat)
     np.fill_diagonal(adj_mat, 0) # mask 1's (field similarity to itself)
@@ -249,17 +253,17 @@ def generate_purpose_graph(sparse_mat, attr_dict, num_to_name):
 # plot graph of drugs in a particular purpose (bokeh)
 def generate_graph_plot(venn_G, purpose, field):
     # Display the network graph from the venn diagram interactions
-    plot = figure(title="Network of Top Similar Drugs by Indications and Usage", x_range=(-5, 5), y_range=(-5, 5),
+    plot = figure(title="Network of Top Similar Drugs by Indications and Usage", x_range=(-50, 50), y_range=(-50, 50),
                   tools="pan,lasso_select,box_select", toolbar_location="right")
     # generate hover capabilities
     node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("name", "@name"), ("purpose", "@purpose"), ("route", "@route")], show_arrow=False)
     plot.add_tools(node_hover_tool, BoxZoomTool(), ResetTool())
 
-    graph = from_networkx(venn_G, nx.spring_layout, scale=2, center=(0, 0))
+    graph = from_networkx(venn_G, nx.fruchterman_reingold_layout, k=.25, scale=1000, center=(0, 0))
 
     # vary thickness with node length
     # weight influence helped by https://stackoverflow.com/questions/49136867/networkx-plotting-in-bokeh-how-to-set-edge-width-based-on-graph-edge-weight
-    graph.edge_renderer.data_source.data["line_width"] = [(venn_G.get_edge_data(a, b)['weight'] + .1) * 3 for a, b in
+    graph.edge_renderer.data_source.data["line_width"] = [(venn_G.get_edge_data(a, b)['weight']) for a, b in
                                                           venn_G.edges()]
     graph.edge_renderer.glyph.line_width = {'field': 'line_width'}
 

@@ -47,7 +47,7 @@ def read_tokenized_data(filename):
 
 # write raw data from json into dataframe
 def write_train_data(file_list, filename):
-    write_t0 = time.time()
+    parse_t0 = time.time()
     df_cols = ["id", "package_label_principal_display_panel",
                "active_ingredient", "inactive_ingredient", "warnings",
                "brand_name", "product_type", "route",
@@ -89,7 +89,7 @@ def write_train_data(file_list, filename):
         current_df = pd.DataFrame(nested_current, columns=df_cols)
         train_df = pd.concat([train_df, current_df])
 
-    print("Parse train:", str(time.time() - write_t0))
+    print("Parse train:", str(time.time() - parse_t0))
 
     # pickle it
     train_df.to_pickle("pkl/" + filename + ".pkl")
@@ -133,7 +133,7 @@ def train_and_save_model(train_corpus, field):
 
     # save
     save_t0 = time.time()
-    model.save(field)
+    model.save(field + ".model")
     # reduce memory
     # model.delete_temporary_training_data(keep_doctags_vectors=True, keep_inference=True)
     print("Save model:", str(time.time() - save_t0))
@@ -141,7 +141,7 @@ def train_and_save_model(train_corpus, field):
 # load doc2vec model for a field
 def load_doc2vec(field):
     load_t0 = time.time()
-    model = gensim.models.doc2vec.Doc2Vec.load(field)
+    model = gensim.models.doc2vec.Doc2Vec.load(field + ".model")
     print("Load model for checkup:", str(time.time() - load_t0))
 
     return model
@@ -184,7 +184,7 @@ def check_model(train_corpus, field):
 def test_model(test_df, purpose, field):
     # only compute pairwise similarity between combinations of documents of a particular purpose/field
     # select only inner purposes with valid field
-    purpose_field = test_df.dropna(subset=["id", field])
+    purpose_field = test_df.dropna(subset=["id", "brand_name", "route", "product_type", field])
     purpose_field = purpose_field.loc[purpose_field["purpose_cluster"].str.contains(purpose)]
     purpose_field = purpose_field.reset_index()
     print("Number of valid field rows:", str(len(purpose_field)))
@@ -221,6 +221,12 @@ def test_model(test_df, purpose, field):
     adj_mat = cosine_similarity(test_vectors, test_vectors)
     print("Verify adj_mat:")
     print(adj_mat)
+
+    # add weights now
+    adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
+    print("Adjusted weights:")
+    print(adj_mat)
+
     # avoid redundant information and send networkx only lower triangle
     adj_mat = np.tril(adj_mat)
     np.fill_diagonal(adj_mat, 0)  # mask 1's (field similarity to itself)
@@ -242,7 +248,7 @@ if __name__ == "__main__":
     full_df = write_and_read_train_data(json_list, "full_train_df")
     train_df = write_and_read_tokenized_data(full_df, "tokenized_train_df")
     train_corpus = process_training_data(train_df, field)
-    train_and_save_model(train_corpus, field)
+    # train_and_save_model(train_corpus, field)
     # check_model(train_corpus, field)
 
     test_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
