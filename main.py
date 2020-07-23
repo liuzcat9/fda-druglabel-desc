@@ -2,6 +2,8 @@ import time
 
 import json, ijson
 import string
+import math
+from collections import OrderedDict
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
@@ -13,7 +15,7 @@ import networkx as nx
 from bokeh.io import output_file, show
 from bokeh.models import (BoxZoomTool, Circle, HoverTool,
                           MultiLine, Plot, Range1d, ResetTool,
-                          NodesAndLinkedEdges, EdgesAndLinkedNodes)
+                          NodesAndLinkedEdges, EdgesAndLinkedNodes, ColumnDataSource)
 from bokeh.plotting import figure, from_networkx
 from bokeh.embed import components, file_html
 
@@ -21,7 +23,9 @@ import spacy
 from spacy.lang.en import English
 
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity, linear_kernel
+from sklearn.metrics.pairwise import cosine_similarity, cosine_distances, linear_kernel
+from sklearn.decomposition import TruncatedSVD
+from sklearn.cluster import DBSCAN
 
 # custom files
 import parse_json, preprocessing
@@ -99,22 +103,16 @@ def draw_venn(drug_df, original, field):
     plt.title("Indication Word Matches in Common Purpose Product Labels", fontsize=10)
     plt.show()
 
-# helper function to find product names of a common purpose
-def find_similar_drugs_from_purpose(drug_df, purpose, field):
-    purpose_t0 = time.time()
-    # FUNC: find similar products by purpose as list
+# helper function to find relevant drug information for a common purpose
+def find_df_fitting_purpose(drug_df, purpose, field):
     purpose_df = drug_df.dropna(
-        subset=["id", "purpose", "brand_name", field])  # exclude all rows with columns of null
+        subset=["id", "brand_name", "route", "product_type", field])  # exclude all rows with columns of null
 
-    print("Has all non-null: ", str(purpose_df.count(axis=0)))
+    purpose_df = purpose_df.loc[purpose_df["purpose_cluster"].str.contains(purpose)]
+    purpose_df = purpose_df.reset_index()
 
-    similar_products = []
-    similar_products.extend(purpose_df.loc[purpose_df["purpose_cluster"].str.contains(purpose),
-                                "id"].tolist())  # append each one separately
-
-    print("Length of similar products: ", str(len(similar_products)))
-    print("Purpose finding and matching field: ", str(time.time() - purpose_t0))
-    return similar_products
+    print("Has rows: ", str(purpose_df.count(axis=0)))
+    return purpose_df
 
 # helper function to find product names of a similar purpose to a product
 # returns: list of similar product names
@@ -156,65 +154,193 @@ def find_matching_field_for_product(drug_df, similar_products, original, field):
 
     return top_indic_df
 
-# 2b-3. Generate a graph using adjacency matrix of all drugs containing purpose based on TF-IDF
-def generate_graph_matching_field_of_purpose(drug_df, similar_products, original_purpose, field):
-    tfidfv_t0 = time.time()
+# Generate tdidf method for cluster similarity
+def generate_similarity_matching_field_of_purpose(drug_df, purpose, field):
     # obtain all fields of similar_products (only relevant products to purpose)
-    purpose_df = drug_df.loc[drug_df["id"].isin(similar_products)]
-    purpose_df = purpose_df.reset_index()
+    purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
 
     field_list = purpose_df[field].tolist()
     print(field_list[0:10])
 
+    fieldX = create_tfidf(field_list)
+
+    print(fieldX.shape)
+    print(purpose_df)
+
+    # run density model
+    density_cluster = run_density_cluster(fieldX)
+
+    # build ordered dictionary of cluster:corresponding drug numbers
+    density_ref = build_ordered_cluster_dict(density_cluster.labels_)
+
+    # calculate adjacency matrix of supernodes by averaging cosine similarity of edges in cluster
+    full_mat = compute_tfidf_cos(fieldX) # each individual pairwise cosine similarity
+    adj_mat = calculate_super_adj_mat(density_ref, full_mat)
+
+    # add weights now
+    adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
+
+    # create mapping dictionaries for cluster-based graph
+    num_to_cluster, attr_dict = generate_super_attr_mappings(purpose_df, density_ref)
+
+    # adj_mat = weight_and_process_adj_mat(adj_mat)
+
+    # assign attributes
+    # num_to_name, attr_dict = generate_attr_mappings(purpose_df)
+
+    # generate graph with top n edges per node weighted by similarity
+    # create sparse adjacency matrix, removing edges
+    sparse_mat = restrict_adjacency_matrix(adj_mat, 8)
+
+    print(adj_mat, adj_mat.shape)
+    print(sparse_mat)
+
+    return (adj_mat, sparse_mat, attr_dict, num_to_cluster)
+
+# create TF-IDF for any list of text entries
+def create_tfidf(field_list):
     # method of representation: TF-IDF
+    tfidfv_t0 = time.time()
     tfidfv = TfidfVectorizer()
     fieldX = tfidfv.fit_transform(field_list)
     print("TF-IDF Field: ", str(time.time() - tfidfv_t0))
-    print(fieldX.shape)
 
-    print(purpose_df)
+    return fieldX
 
+# compute cosine_similarity using faster linear_kernel for normalized data
+def compute_tfidf_cos(fieldX):
     # compute cosine similarity
     # cos_sim_t0 = time.time()
     # cos_sim = cosine_similarity(fieldX, fieldX)
     # print("cosine_similarity:", str(time.time() - cos_sim_t0)) # slightly more inefficient
     lin_kern_t0 = time.time()
     adj_mat = linear_kernel(fieldX, fieldX)
+    print("linear_kernel:", str(time.time() - lin_kern_t0))
 
+    return adj_mat
+
+# provide DBSCAN model results using n_samples x n_features X
+def run_density_cluster(X):
+    # cluster into supernodes based on cosine distance, density/nearest neighbors: eps=.32
+    density_cluster = DBSCAN(eps=.32, min_samples=5, metric="cosine").fit(X)
+    print("Number of clusters:", str(len(set(density_cluster.labels_)) - 1))
+    print(list(density_cluster.labels_).count(-1))
+
+    return density_cluster
+
+# build ordered dictionary of cluster: drug number pairs
+def build_ordered_cluster_dict(density_cluster_labels):
+    dict_t0 = time.time()
+    density_ref = {}
+    non_outlier_n = len(set(density_cluster_labels)) - 1  # start from viable end list of labels
+
+    for num, cluster in enumerate(density_cluster_labels):
+        if cluster == -1:  # outliers are individual points
+            if non_outlier_n not in density_ref:
+                density_ref[non_outlier_n] = []
+            density_ref[non_outlier_n].append(num)
+            non_outlier_n += 1
+        else:
+            if cluster not in density_ref:
+                density_ref[cluster] = []
+            density_ref[cluster].append(num)
+
+    density_ref = OrderedDict(sorted(density_ref.items()))
+    print("Build dict:", str(time.time() - dict_t0))
+    print([str(cluster) + ": " + str(len(density_ref[cluster])) for cluster in density_ref])
+
+    return density_ref
+
+# calculate adjacency matrix of supernodes (clusters) by averaging all connections between the two clusters
+def calculate_super_adj_mat(density_ref, full_mat):
+    adj_t0 = time.time()
+    adj_mat = np.zeros((len(density_ref), len(density_ref)))
+
+    cluster_combs = itertools.combinations(density_ref.keys(), 2)
+    for cluster1, cluster2 in cluster_combs:
+        drug_combs = list(itertools.product(density_ref[cluster1], density_ref[cluster2]))
+        cos_sum = 0
+        for drug1, drug2 in drug_combs:
+            cos_sum += full_mat[drug1][drug2]
+        avg = cos_sum / len(drug_combs)
+
+        adj_mat[cluster1][cluster2] = avg
+
+    print("Build super adjacency matrix:", str(time.time() - adj_t0))
+
+    return adj_mat
+
+# general function to add weights and reduce adjacency matrix for networkx
+def weight_and_process_adj_mat(adj_mat):
     # add weights now
     adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
 
     # avoid redundant information and send networkx only lower triangle
     adj_mat = np.tril(adj_mat)
-    np.fill_diagonal(adj_mat, 0) # mask 1's (field similarity to itself)
-    print("linear_kernel:", str(time.time() - lin_kern_t0))
+    np.fill_diagonal(adj_mat, 0)  # mask 1's (field similarity to itself)
 
-    # assign attributes
-    num_to_name, attr_dict = generate_attr_mappings(purpose_df, similar_products)
+    return adj_mat
 
-    # generate graph with top n edges per node weighted by similarity
-    # iterate through all combinations and find similarities
+# create all attribute mappings for each cluster showing in graph
+def generate_super_attr_mappings(purpose_df, density_ref):
+    attr_t0 = time.time()
+    # generate helper dictionary for list of ids per cluster: ordered
+    num_to_name = generate_cluster_num_to_name(purpose_df, density_ref)
 
-    # create sparse adjacency matrix, removing edges
-    sparse_mat = restrict_adjacency_matrix(adj_mat, num_to_name, 8)
+    attr_dict = {}  # attributes of nodes to be added
 
-    print(adj_mat)
-    print(sparse_mat)
+    cutoff = 10
+    # iterate through products and generate attributes/mappings
+    for i, cluster in enumerate(num_to_name):
+        names = purpose_df.loc[purpose_df["id"].isin(num_to_name[cluster]), "brand_name"].tolist()
+        num_per_cluster = len(names)
 
-    # create graph
-    venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
-    print("Number of nodes: ", str(len(venn_G.nodes)))
+        # shorten names if in a cluster
+        # truncate or leave as is
+        names = names[0:cutoff]
+        routes = purpose_df.loc[purpose_df["id"].isin(num_to_name[cluster]), "route"].tolist()[0:cutoff]
+        if num_per_cluster > cutoff:
+            # add ellipses for more
+            names.append("...")
+            routes.append("...")
 
-    return (venn_G, adj_mat, attr_dict, num_to_name)
+        attr_dict[cluster] = {"id": "Cluster " + str(i) if num_per_cluster > 1 else "Individual Drug",
+                              "num_drugs": num_per_cluster, "size_drugs": math.log(num_per_cluster) + 5,
+                              "name": ", ".join(names), "route": ", ".join(routes)}
+
+    print(attr_dict)
+
+    print("Assign attributes: ", str(time.time() - attr_t0))
+
+    num_to_cluster = {cluster: info["id"] for cluster, info in attr_dict.items()}
+    print("num_to_cluster:", num_to_cluster)
+
+    return num_to_cluster, attr_dict
+
+# generate dictionary of cluster: [ids of drugs]
+def generate_cluster_num_to_name(purpose_df, density_ref):
+    num_to_name = {}
+    # create mapping dictionaries
+    # post cluster: [drug ids]
+    for cluster, drug_list in density_ref.items():
+        if cluster not in num_to_name:
+            num_to_name[cluster] = []
+        for drug in drug_list:
+            num_to_name[cluster].append(purpose_df.iloc[drug]["id"])
+
+    print(num_to_name)
+
+    return num_to_name
 
 # generate all reference dictionaries to traits for graph
-def generate_attr_mappings(purpose_df, product_list):
+def generate_attr_mappings(purpose_df):
     attr_t0 = time.time()
     # create mapping dictionaries
     num_to_name = pd.Series(purpose_df.id, index=purpose_df.index).to_dict()
     attr_dict = {}  # attributes of nodes to be added
 
     # iterate through products and generate attributes/mappings
+    product_list = purpose_df["id"].tolist()
     for i, product_id in enumerate(product_list):
         attr_dict[product_id] = {"id": product_id,
                                  "name": purpose_df.loc[purpose_df["id"] == product_id, "brand_name"].values[0],
@@ -226,12 +352,12 @@ def generate_attr_mappings(purpose_df, product_list):
     return (num_to_name, attr_dict)
 
 # restrict adjacency matrix to max n edges per node
-def restrict_adjacency_matrix(adj_mat, num_to_name, n_max):
+def restrict_adjacency_matrix(adj_mat, n_max):
     narrow_t0 = time.time()
     # method 2: narrow adjacency matrix to max n edges per node (including previously determined max edges)
-    sparse_mat = np.zeros((len(num_to_name), len(num_to_name)))
+    sparse_mat = np.zeros((adj_mat.shape[0], adj_mat.shape[1]))
 
-    for current_node_i in range(0, len(num_to_name)):
+    for current_node_i in range(0, adj_mat.shape[0]):
         adj_node_indexes = adj_mat[current_node_i].argsort()[-n_max:][
                            ::-1]  # max n edges per node by weight (duplicate possible)
         for adj_node_i in adj_node_indexes:
@@ -245,31 +371,33 @@ def restrict_adjacency_matrix(adj_mat, num_to_name, n_max):
 # create graph of drugs in a particular purpose
 def generate_purpose_graph(sparse_mat, attr_dict, num_to_name):
     venn_G = nx.from_numpy_matrix(sparse_mat)  # create from adjacency matrix
-    venn_G = nx.relabel.relabel_nodes(venn_G, num_to_name)  # set node names to product ids
+    # venn_G = nx.relabel.relabel_nodes(venn_G, num_to_name)  # set node names to product ids
     nx.set_node_attributes(venn_G, attr_dict)  # add relevant attributes in
+
+    print("Number of nodes: ", str(len(venn_G.nodes)))
 
     return venn_G
 
 # plot graph of drugs in a particular purpose (bokeh)
 def generate_graph_plot(venn_G, purpose, field):
     # Display the network graph from the venn diagram interactions
-    plot = figure(title="Network of Top Similar Drugs by Indications and Usage", x_range=(-50, 50), y_range=(-50, 50),
+    plot = figure(title="Network of Top Similar Drugs by Field", x_range=(-1000, 1000), y_range=(-1000, 1000),
                   tools="pan,lasso_select,box_select", toolbar_location="right")
     # generate hover capabilities
-    node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("name", "@name"), ("purpose", "@purpose"), ("route", "@route")], show_arrow=False)
+    node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("number of drugs", "@num_drugs"),
+                                          ("name", "@name"), ("route", "@route")], show_arrow=False)
     plot.add_tools(node_hover_tool, BoxZoomTool(), ResetTool())
 
     graph = from_networkx(venn_G, nx.fruchterman_reingold_layout, k=.25, scale=1000, center=(0, 0))
 
     # vary thickness with node length
     # weight influence helped by https://stackoverflow.com/questions/49136867/networkx-plotting-in-bokeh-how-to-set-edge-width-based-on-graph-edge-weight
-    graph.edge_renderer.data_source.data["line_width"] = [(venn_G.get_edge_data(a, b)['weight']) for a, b in
-                                                          venn_G.edges()]
-    graph.edge_renderer.glyph.line_width = {'field': 'line_width'}
+    graph.edge_renderer.glyph.line_width = {'field': 'weight'}
 
     # graph settings
-    graph.node_renderer.glyph = Circle(size=15, fill_color="pink")
-    graph.edge_renderer.hover_glyph = MultiLine(line_color="red", line_width={'field': 'line_width'})
+    # change size of node with cluster
+    graph.node_renderer.glyph = Circle(size="size_drugs", fill_color="pink")
+    graph.edge_renderer.hover_glyph = MultiLine(line_color="red", line_width={'field': 'weight'})
     graph.inspection_policy = NodesAndLinkedEdges()
 
     plot.renderers.append(graph)
@@ -309,6 +437,16 @@ def plot_adj_mat_heatmap(adj_mat, attr_dict, product_list):
     fig.tight_layout()
     plt.show()
 
+# perform TruncatedSVD (LSA for TD-IDF) to see if dimensionality can be sufficiently reduced
+def perform_LSA(drug_df, field="purpose"):
+    # TF-IDF
+    purposeX = create_tfidf(drug_df[field].tolist())
+
+    # LSA
+    lsa = TruncatedSVD(n_components=1500)
+    lsa.fit(purposeX)
+    print(sum(lsa.explained_variance_ratio_))
+
 # main
 def main():
     # file read and setup
@@ -319,35 +457,39 @@ def main():
 
     print(drug_df[0:10]) # verify read
 
-    # 1: generate key purposes
-    rank_purpose(drug_df, 30)
-
-    print("Full length: ", str(len(drug_df)))
-
-    # 2.
-    draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
+    # # 1: generate key purposes
+    # rank_purpose(drug_df, 30)
+    #
+    # print("Full length: ", str(len(drug_df)))
+    #
+    # # 2.
+    # draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
 
     # 3b. Automate process to obtain node network graphs of purpose_field combinations
-    purposes = ["sunscreen purposes uses protectant skin"]
-    fields = ["indications_and_usage", "warnings"]
+    purposes = ["sanitizer hand antiseptic antimicrobial skin"]
+    fields = ["warnings"]
 
     for purpose in purposes:
         for field in fields:
             # 2b: Use purpose to find top products to compare
             full_graph_t0 = time.time()
-            similar_products = find_similar_drugs_from_purpose(drug_df, purpose, field)
-
             # 3. Generate a graph node network of top products and their similarity to each other
-            venn_G, adj_mat, attr_dict, num_to_name = \
-                generate_graph_matching_field_of_purpose(drug_df, similar_products, purpose, field)
+            adj_mat, sparse_mat, attr_dict, num_to_name = \
+                generate_similarity_matching_field_of_purpose(drug_df, purpose, field)
 
+            # create graph
+            venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
             print("Time to build graph:", str(time.time() - full_graph_t0))
+
             generate_graph_plot(venn_G, purpose, field)
             print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
     # 4: plot heatmap using adjacency matrix for all matches
     # TODO: fix name reference
-    plot_adj_mat_heatmap(adj_mat, attr_dict, similar_products)
+    # plot_adj_mat_heatmap(adj_mat, attr_dict, similar_products)
+
+    # 5: Check dimensionality reduction (not plottable...)
+    # perform_LSA(drug_df, field="purpose")
 
 if __name__ == "__main__":
     main()
