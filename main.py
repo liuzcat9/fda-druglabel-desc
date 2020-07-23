@@ -158,6 +158,7 @@ def find_matching_field_for_product(drug_df, similar_products, original, field):
 def generate_similarity_matching_field_of_purpose(drug_df, purpose, field):
     # obtain all fields of similar_products (only relevant products to purpose)
     purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
+    print("Valid rows:", str(len(purpose_df)))
 
     field_list = purpose_df[field].tolist()
     print(field_list[0:10])
@@ -222,7 +223,7 @@ def compute_tfidf_cos(fieldX):
 # provide DBSCAN model results using n_samples x n_features X
 def run_density_cluster(X):
     # cluster into supernodes based on cosine distance, density/nearest neighbors: eps=.32
-    density_cluster = DBSCAN(eps=.32, min_samples=5, metric="cosine").fit(X)
+    density_cluster = DBSCAN(eps=.15, min_samples=5, metric="cosine").fit(X)
     print("Number of clusters:", str(len(set(density_cluster.labels_)) - 1))
     print(list(density_cluster.labels_).count(-1))
 
@@ -443,9 +444,11 @@ def perform_LSA(drug_df, field="purpose"):
     purposeX = create_tfidf(drug_df[field].tolist())
 
     # LSA
-    lsa = TruncatedSVD(n_components=1500)
+    lsa = TruncatedSVD(n_components=100)
     lsa.fit(purposeX)
     print(sum(lsa.explained_variance_ratio_))
+
+    return lsa.fit_transform(purposeX)
 
 # main
 def main():
@@ -466,8 +469,8 @@ def main():
     # draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
 
     # 3b. Automate process to obtain node network graphs of purpose_field combinations
-    purposes = ["sanitizer hand antiseptic antimicrobial skin"]
-    fields = ["warnings"]
+    purposes = ["sunscreen purposes uses protectant skin"]
+    fields = ["indications_and_usage"]
 
     for purpose in purposes:
         for field in fields:

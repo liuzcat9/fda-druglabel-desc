@@ -182,63 +182,79 @@ def check_model(train_corpus, field):
 
 # run model on testing data
 def test_model(test_df, purpose, field):
-    # only compute pairwise similarity between combinations of documents of a particular purpose/field
-    # select only inner purposes with valid field
-    purpose_field = test_df.dropna(subset=["id", "brand_name", "route", "product_type", field])
-    purpose_field = purpose_field.loc[purpose_field["purpose_cluster"].str.contains(purpose)]
-    purpose_field = purpose_field.reset_index()
-    print("Number of valid field rows:", str(len(purpose_field)))
-
-    # construct attributes
-    num_to_name, attr_dict = main.generate_attr_mappings(purpose_field, purpose_field["id"].tolist())
+    # obtain all fields of similar_products (only relevant products to purpose)
+    purpose_df = main.find_df_fitting_purpose(test_df, purpose, field)
+    print("Number of valid field rows:", str(len(purpose_df)))
 
     # load model
     model = load_doc2vec(field)
 
-    corpus_t0 = time.time()
-    # create list of tokens to compare (based on indices)
-    test_list = list(map(str.split, purpose_field[field].tolist()))
-    # convert test list into tagged_documents
-    test_corpus = []
-    for i, test_tokens in enumerate(test_list):
-        test_corpus.append(gensim.models.doc2vec.TaggedDocument(test_tokens, [i]))
-    # remove unheard of vocabulary (also happens because of typos)
-    print("Create test corpus:", str(time.time() - corpus_t0))
-
-    print("Create list of tokens:", str(len(test_corpus)))
-    print(test_corpus[0].words)
+    test_corpus = create_test_corpus(purpose_df)
 
     # create all test vectors at once for comparison
     vectors_t0 = time.time()
     # use list of words in TaggedDocument and reshape as 1 feature to conform to sklearn
     # n_samples x n_features
-    test_vectors = np.array([model.infer_vector(para.words) for para in test_corpus])
+    testX = np.array([model.infer_vector(para.words) for para in test_corpus])
     print("Create test vectors:", str(time.time() - vectors_t0))
-    print(test_vectors.shape)
+    print(testX.shape)
 
+    # run density model
+    density_cluster = main.run_density_cluster(testX)
+
+    # build ordered dictionary of cluster:corresponding drug numbers
+    density_ref = main.build_ordered_cluster_dict(density_cluster.labels_)
+
+    # calculate adjacency matrix of supernodes by averaging cosine similarity of edges in cluster
     # create adjacency matrix
-    adj_t0 = time.time()
-    adj_mat = cosine_similarity(test_vectors, test_vectors)
-    print("Verify adj_mat:")
-    print(adj_mat)
+    full_mat = cosine_similarity(testX, testX)
+    print("Verify full_mat:")
+    print(full_mat)
+
+    adj_mat = main.calculate_super_adj_mat(density_ref, full_mat)
 
     # add weights now
     adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
-    print("Adjusted weights:")
-    print(adj_mat)
 
-    # avoid redundant information and send networkx only lower triangle
-    adj_mat = np.tril(adj_mat)
-    np.fill_diagonal(adj_mat, 0)  # mask 1's (field similarity to itself)
-    print("Create adjacency matrix:", str(time.time() - adj_t0))
+    # create mapping dictionaries for cluster-based graph
+    num_to_cluster, attr_dict = main.generate_super_attr_mappings(purpose_df, density_ref)
+
+    # adj_mat = main.weight_and_process_adj_mat(adj_mat)
+
+    # assign attributes
+    # num_to_name, attr_dict = main.generate_attr_mappings(purpose_df)
+
+    # generate graph with top n edges per node weighted by similarity
+    # create sparse adjacency matrix, removing edges
+    sparse_mat = main.restrict_adjacency_matrix(adj_mat, 8)
+    # only compute pairwise similarity between combinations of documents of a particular purpose/field
+    # select only inner purposes with valid field
+
+    # # avoid redundant information and send networkx only lower triangle
+    # adj_mat = np.tril(adj_mat)
+    # np.fill_diagonal(adj_mat, 0)  # mask 1's (field similarity to itself)
+    # print("Create adjacency matrix:", str(time.time() - adj_t0))
     print(adj_mat, adj_mat.shape)
+    print(sparse_mat)
 
-    # create sparse matrix
-    sparse_mat = main.restrict_adjacency_matrix(adj_mat, num_to_name, 8)
+    return (adj_mat, sparse_mat, attr_dict, num_to_cluster)
 
-    venn_G = main.generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
+# generate test_corpus TaggedDocuments
+def create_test_corpus(purpose_df):
+    corpus_t0 = time.time()
+    # create list of tokens to compare (based on indices)
+    test_list = list(map(str.split, purpose_df[field].tolist()))
+    # convert test list into tagged_documents
+    test_corpus = []
+    for i, test_tokens in enumerate(test_list):
+        test_corpus.append(gensim.models.doc2vec.TaggedDocument(test_tokens, [i]))
 
-    return (venn_G, adj_mat, attr_dict, num_to_name)
+    print("Create test corpus:", str(time.time() - corpus_t0))
+
+    print("Create list of tokens:", str(len(test_corpus)))
+    print(test_corpus[0].words)
+
+    return test_corpus
 
 if __name__ == "__main__":
     field = "indications_and_usage"
@@ -253,6 +269,6 @@ if __name__ == "__main__":
 
     test_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
     purpose = "sunscreen purposes uses protectant skin"
-    venn_G, adj_mat, attr_dict, num_to_name = test_model(test_df, purpose, field)
-
+    adj_mat, sparse_mat, attr_dict, num_to_cluster = test_model(test_df, purpose, field)
+    venn_G = main.generate_purpose_graph(sparse_mat, attr_dict, num_to_cluster)
     main.generate_graph_plot(venn_G, purpose, field)
