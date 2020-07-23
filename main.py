@@ -22,6 +22,8 @@ from spacy.lang.en import English
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity, linear_kernel
+from sklearn.decomposition import TruncatedSVD
+from sklearn.cluster import DBSCAN
 
 # custom files
 import parse_json, preprocessing
@@ -99,22 +101,16 @@ def draw_venn(drug_df, original, field):
     plt.title("Indication Word Matches in Common Purpose Product Labels", fontsize=10)
     plt.show()
 
-# helper function to find product names of a common purpose
-def find_similar_drugs_from_purpose(drug_df, purpose, field):
-    purpose_t0 = time.time()
-    # FUNC: find similar products by purpose as list
+# helper function to find relevant drug information for a common purpose
+def find_df_fitting_purpose(drug_df, purpose, field):
     purpose_df = drug_df.dropna(
-        subset=["id", "purpose", "brand_name", field])  # exclude all rows with columns of null
+        subset=["id", "brand_name", "route", "product_type", field])  # exclude all rows with columns of null
 
-    print("Has all non-null: ", str(purpose_df.count(axis=0)))
+    purpose_df = purpose_df.loc[purpose_df["purpose_cluster"].str.contains(purpose)]
+    purpose_df = purpose_df.reset_index()
 
-    similar_products = []
-    similar_products.extend(purpose_df.loc[purpose_df["purpose_cluster"].str.contains(purpose),
-                                "id"].tolist())  # append each one separately
-
-    print("Length of similar products: ", str(len(similar_products)))
-    print("Purpose finding and matching field: ", str(time.time() - purpose_t0))
-    return similar_products
+    print("Has rows: ", str(purpose_df.count(axis=0)))
+    return purpose_df
 
 # helper function to find product names of a similar purpose to a product
 # returns: list of similar product names
@@ -157,64 +153,83 @@ def find_matching_field_for_product(drug_df, similar_products, original, field):
     return top_indic_df
 
 # 2b-3. Generate a graph using adjacency matrix of all drugs containing purpose based on TF-IDF
-def generate_graph_matching_field_of_purpose(drug_df, similar_products, original_purpose, field):
-    tfidfv_t0 = time.time()
+def generate_similarity_matching_field_of_purpose(drug_df, purpose, field):
     # obtain all fields of similar_products (only relevant products to purpose)
-    purpose_df = drug_df.loc[drug_df["id"].isin(similar_products)]
-    purpose_df = purpose_df.reset_index()
+    purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
 
     field_list = purpose_df[field].tolist()
     print(field_list[0:10])
 
+    fieldX = create_tfidf(field_list)
+
+    print(fieldX.shape)
+    print(purpose_df)
+
+    adj_mat = compute_tfidf_cos(fieldX)
+
+    # cluster into supernodes
+    for x in np.arange(.2, .3, .01):
+        density_cluster = DBSCAN(eps=x, min_samples=3, metric="cosine").fit(fieldX)
+        print("Eps:", str(x))
+        print(density_cluster.labels_[60:200])
+        print(list(density_cluster.labels_).count(-1))
+
+    adj_mat = weight_and_process_adj_mat(adj_mat)
+
+    # assign attributes
+    num_to_name, attr_dict = generate_attr_mappings(purpose_df)
+
+    # generate graph with top n edges per node weighted by similarity
+    # create sparse adjacency matrix, removing edges
+    sparse_mat = restrict_adjacency_matrix(adj_mat, num_to_name, 8)
+
+    print(adj_mat, adj_mat.shape)
+    print(sparse_mat)
+
+    return (adj_mat, sparse_mat, attr_dict, num_to_name)
+
+# create TF-IDF for any list of text entries
+def create_tfidf(field_list):
     # method of representation: TF-IDF
+    tfidfv_t0 = time.time()
     tfidfv = TfidfVectorizer()
     fieldX = tfidfv.fit_transform(field_list)
     print("TF-IDF Field: ", str(time.time() - tfidfv_t0))
-    print(fieldX.shape)
 
-    print(purpose_df)
+    return fieldX
 
+# compute cosine_similarity using faster linear_kernel for normalized data
+def compute_tfidf_cos(fieldX):
     # compute cosine similarity
     # cos_sim_t0 = time.time()
     # cos_sim = cosine_similarity(fieldX, fieldX)
     # print("cosine_similarity:", str(time.time() - cos_sim_t0)) # slightly more inefficient
     lin_kern_t0 = time.time()
     adj_mat = linear_kernel(fieldX, fieldX)
+    print("linear_kernel:", str(time.time() - lin_kern_t0))
 
+    return adj_mat
+
+# general function to add weights and reduce adjacency matrix for networkx
+def weight_and_process_adj_mat(adj_mat):
     # add weights now
     adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
 
     # avoid redundant information and send networkx only lower triangle
     adj_mat = np.tril(adj_mat)
-    np.fill_diagonal(adj_mat, 0) # mask 1's (field similarity to itself)
-    print("linear_kernel:", str(time.time() - lin_kern_t0))
+    np.fill_diagonal(adj_mat, 0)  # mask 1's (field similarity to itself)
 
-    # assign attributes
-    num_to_name, attr_dict = generate_attr_mappings(purpose_df, similar_products)
-
-    # generate graph with top n edges per node weighted by similarity
-    # iterate through all combinations and find similarities
-
-    # create sparse adjacency matrix, removing edges
-    sparse_mat = restrict_adjacency_matrix(adj_mat, num_to_name, 8)
-
-    print(adj_mat)
-    print(sparse_mat)
-
-    # create graph
-    venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
-    print("Number of nodes: ", str(len(venn_G.nodes)))
-
-    return (venn_G, adj_mat, attr_dict, num_to_name)
+    return adj_mat
 
 # generate all reference dictionaries to traits for graph
-def generate_attr_mappings(purpose_df, product_list):
+def generate_attr_mappings(purpose_df):
     attr_t0 = time.time()
     # create mapping dictionaries
     num_to_name = pd.Series(purpose_df.id, index=purpose_df.index).to_dict()
     attr_dict = {}  # attributes of nodes to be added
 
     # iterate through products and generate attributes/mappings
+    product_list = purpose_df["id"].tolist()
     for i, product_id in enumerate(product_list):
         attr_dict[product_id] = {"id": product_id,
                                  "name": purpose_df.loc[purpose_df["id"] == product_id, "brand_name"].values[0],
@@ -248,12 +263,14 @@ def generate_purpose_graph(sparse_mat, attr_dict, num_to_name):
     venn_G = nx.relabel.relabel_nodes(venn_G, num_to_name)  # set node names to product ids
     nx.set_node_attributes(venn_G, attr_dict)  # add relevant attributes in
 
+    print("Number of nodes: ", str(len(venn_G.nodes)))
+
     return venn_G
 
 # plot graph of drugs in a particular purpose (bokeh)
 def generate_graph_plot(venn_G, purpose, field):
     # Display the network graph from the venn diagram interactions
-    plot = figure(title="Network of Top Similar Drugs by Indications and Usage", x_range=(-50, 50), y_range=(-50, 50),
+    plot = figure(title="Network of Top Similar Drugs by Field", x_range=(-1000, 1000), y_range=(-1000, 1000),
                   tools="pan,lasso_select,box_select", toolbar_location="right")
     # generate hover capabilities
     node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("name", "@name"), ("purpose", "@purpose"), ("route", "@route")], show_arrow=False)
@@ -309,6 +326,16 @@ def plot_adj_mat_heatmap(adj_mat, attr_dict, product_list):
     fig.tight_layout()
     plt.show()
 
+# perform TruncatedSVD (LSA for TD-IDF) to see if dimensionality can be sufficiently reduced
+def perform_LSA(drug_df, field="purpose"):
+    # TF-IDF
+    purposeX = create_tfidf(drug_df[field].tolist())
+
+    # LSA
+    lsa = TruncatedSVD(n_components=1500)
+    lsa.fit(purposeX)
+    print(sum(lsa.explained_variance_ratio_))
+
 # main
 def main():
     # file read and setup
@@ -319,35 +346,39 @@ def main():
 
     print(drug_df[0:10]) # verify read
 
-    # 1: generate key purposes
-    rank_purpose(drug_df, 30)
-
-    print("Full length: ", str(len(drug_df)))
-
-    # 2.
-    draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
+    # # 1: generate key purposes
+    # rank_purpose(drug_df, 30)
+    #
+    # print("Full length: ", str(len(drug_df)))
+    #
+    # # 2.
+    # draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
 
     # 3b. Automate process to obtain node network graphs of purpose_field combinations
     purposes = ["sunscreen purposes uses protectant skin"]
-    fields = ["indications_and_usage", "warnings"]
+    fields = ["indications_and_usage"]
 
     for purpose in purposes:
         for field in fields:
             # 2b: Use purpose to find top products to compare
             full_graph_t0 = time.time()
-            similar_products = find_similar_drugs_from_purpose(drug_df, purpose, field)
-
             # 3. Generate a graph node network of top products and their similarity to each other
-            venn_G, adj_mat, attr_dict, num_to_name = \
-                generate_graph_matching_field_of_purpose(drug_df, similar_products, purpose, field)
+            adj_mat, sparse_mat, attr_dict, num_to_name = \
+                generate_similarity_matching_field_of_purpose(drug_df, purpose, field)
 
+            # create graph
+            venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
             print("Time to build graph:", str(time.time() - full_graph_t0))
+
             generate_graph_plot(venn_G, purpose, field)
             print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
     # 4: plot heatmap using adjacency matrix for all matches
     # TODO: fix name reference
-    plot_adj_mat_heatmap(adj_mat, attr_dict, similar_products)
+    # plot_adj_mat_heatmap(adj_mat, attr_dict, similar_products)
+
+    # 5: Check dimensionality reduction (not plottable...)
+    # perform_LSA(drug_df, field="purpose")
 
 if __name__ == "__main__":
     main()
