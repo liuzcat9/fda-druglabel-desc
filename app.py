@@ -26,7 +26,8 @@ def result():
         print("File retrieved should be:", output_file)
 
     return render_template('result.html', purpose=purpose, field=field, output_file=output_file,
-                           output_file2="sunscreen_purposes_uses_protectant_skin-indications_and_usage.html")
+                           output_file2="sunscreen_purposes_uses_protectant_skin-indications_and_usage.html",
+                           output_file3="sunscreen_purposes_uses_protectant_skin-indications_and_usage.png")
 
 if __name__ == '__main__':
     app.run(port=33507, debug=True)
