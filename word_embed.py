@@ -239,6 +239,70 @@ def test_model(test_df, purpose, field):
 
     return (adj_mat, sparse_mat, attr_dict, num_to_cluster)
 
+# use the topics clustering method with doc2vec information
+def test_model_by_topics(test_df, purpose, field):
+    # obtain all fields of similar_products (only relevant products to purpose)
+    purpose_df = main.find_df_fitting_purpose(test_df, purpose, field)
+    print("Number of valid field rows:", str(len(purpose_df)))
+
+    field_list = purpose_df[field].tolist()
+    print(field_list[0:10])
+
+    print(purpose_df)
+
+    # preprocess for LDA
+    count_data, words = main.fit_count_vectorizer(field_list)
+
+    best_lda, lda_prob = main.fit_LDA(count_data)
+    print(lda_prob)
+
+    topics_dict = main.get_topics_word_dict(best_lda, words)
+
+    # create documents (in order) clustered into topics
+    doc_topic_list = main.create_doc_topic_cluster(best_lda, lda_prob)
+    print(doc_topic_list)
+
+    # build ordered dictionary of cluster:corresponding drug numbers
+    cluster_ref = main.build_ordered_cluster_dict(doc_topic_list)
+
+    # some documents are not assigned to all topics, so reset index
+    cluster_ref, topics_dict = main.reset_cluster_index(cluster_ref, topics_dict)
+
+    # load model
+    model = load_doc2vec(field)
+
+    test_corpus = create_test_corpus(purpose_df)
+
+    # create all test vectors at once for comparison
+    vectors_t0 = time.time()
+    # use list of words in TaggedDocument and reshape as 1 feature to conform to sklearn
+    # n_samples x n_features
+    testX = np.array([model.infer_vector(para.words) for para in test_corpus])
+    print("Create test vectors:", str(time.time() - vectors_t0))
+    print(testX.shape)
+
+    # calculate adjacency matrix of supernodes by averaging cosine similarity of edges in cluster
+    # create adjacency matrix
+    full_mat = cosine_similarity(testX, testX)
+    print("Verify full_mat:")
+    print(full_mat)
+
+    adj_mat = main.calculate_super_adj_mat(cluster_ref, full_mat)
+
+    # add weights now
+    adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
+
+    # create mapping dictionaries for cluster-based graph
+    num_to_cluster, attr_dict = main.generate_super_attr_mappings(purpose_df, cluster_ref, topics_dict)
+
+    # create sparse adjacency matrix by generating graph with top n edges per node weighted by similarity, removing edges
+    sparse_mat = main.restrict_adjacency_matrix(adj_mat, 8)
+
+    print(adj_mat, adj_mat.shape)
+    print(sparse_mat)
+
+    return (adj_mat, sparse_mat, attr_dict, num_to_cluster)
+
 # generate test_corpus TaggedDocuments
 def create_test_corpus(purpose_df):
     corpus_t0 = time.time()
@@ -257,18 +321,23 @@ def create_test_corpus(purpose_df):
     return test_corpus
 
 if __name__ == "__main__":
-    field = "indications_and_usage"
+    field = "warnings"
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
                  "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
     full_df = write_and_read_train_data(json_list, "full_train_df")
     train_df = write_and_read_tokenized_data(full_df, "tokenized_train_df")
     train_corpus = process_training_data(train_df, field)
-    # train_and_save_model(train_corpus, field)
+    train_and_save_model(train_corpus, field)
     # check_model(train_corpus, field)
 
+    total_t0 = time.time()
     test_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
     purpose = "sunscreen purposes uses protectant skin"
-    adj_mat, sparse_mat, attr_dict, num_to_cluster = test_model(test_df, purpose, field)
+
+    # adj_mat, sparse_mat, attr_dict, num_to_cluster = test_model(test_df, purpose, field)
+    adj_mat, sparse_mat, attr_dict, num_to_cluster = test_model_by_topics(test_df, purpose, field)
     venn_G = main.generate_purpose_graph(sparse_mat, attr_dict, num_to_cluster)
     main.generate_graph_plot(venn_G, purpose, field)
+
+    print("Total test time:", str(time.time() - total_t0))
