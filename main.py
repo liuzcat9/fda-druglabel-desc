@@ -19,13 +19,16 @@ from bokeh.models import (BoxZoomTool, Circle, HoverTool,
 from bokeh.plotting import figure, from_networkx
 from bokeh.embed import components, file_html
 
+from wordcloud import WordCloud
+
 import spacy
 from spacy.lang.en import English
 
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity, cosine_distances, linear_kernel
-from sklearn.decomposition import TruncatedSVD
-from sklearn.cluster import DBSCAN
+from sklearn.decomposition import TruncatedSVD, LatentDirichletAllocation
+from sklearn.cluster import DBSCAN, SpectralClustering, Birch
+from sklearn.model_selection import GridSearchCV
 
 # custom files
 import parse_json, preprocessing
@@ -170,6 +173,8 @@ def generate_similarity_matching_field_of_purpose(drug_df, purpose, field):
 
     # run density model
     density_cluster = run_density_cluster(fieldX)
+    # fieldX = perform_LSA(purpose_df, field)
+    # density_cluster = run_spectral_cluster(fieldX)
 
     # build ordered dictionary of cluster:corresponding drug numbers
     density_ref = build_ordered_cluster_dict(density_cluster.labels_)
@@ -188,6 +193,57 @@ def generate_similarity_matching_field_of_purpose(drug_df, purpose, field):
 
     # assign attributes
     # num_to_name, attr_dict = generate_attr_mappings(purpose_df)
+
+    # generate graph with top n edges per node weighted by similarity
+    # create sparse adjacency matrix, removing edges
+    sparse_mat = restrict_adjacency_matrix(adj_mat, 8)
+
+    print(adj_mat, adj_mat.shape)
+    print(sparse_mat)
+
+    return (adj_mat, sparse_mat, attr_dict, num_to_cluster)
+
+# Generate tdidf method using topic "prediction" nodes
+def generate_topics_matching_field_of_purpose(drug_df, purpose, field):
+    # obtain all fields of similar_products (only relevant products to purpose)
+    purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
+    print("Valid rows:", str(len(purpose_df)))
+
+    field_list = purpose_df[field].tolist()
+    print(field_list[0:10])
+
+    print(purpose_df)
+
+    # preprocess for LDA
+    count_data, words = fit_count_vectorizer(field_list)
+
+    count_dict = get_top_words_by_freq(count_data, words)
+
+    best_lda, lda_prob = fit_LDA(count_data)
+    print(lda_prob)
+
+    topics_dict = get_topics_word_dict(best_lda, words)
+
+    # create documents (in order) clustered into topics
+    doc_topic_list = create_doc_topic_cluster(best_lda, lda_prob)
+    print(doc_topic_list)
+
+    # build ordered dictionary of cluster:corresponding drug numbers
+    cluster_ref = build_ordered_cluster_dict(doc_topic_list)
+
+    # some documents are not assigned to all topics, so reset index
+    cluster_ref, topics_dict = reset_cluster_index(cluster_ref, topics_dict)
+
+    # calculate adjacency matrix of supernodes by averaging cosine similarity of edges in cluster
+    fieldX = create_tfidf(field_list)
+    full_mat = compute_tfidf_cos(fieldX) # each individual pairwise cosine similarity
+    adj_mat = calculate_super_adj_mat(cluster_ref, full_mat)
+
+    # add weights now
+    adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
+
+    # create mapping dictionaries for cluster-based graph
+    num_to_cluster, attr_dict = generate_super_attr_mappings(purpose_df, cluster_ref, topics_dict)
 
     # generate graph with top n edges per node weighted by similarity
     # create sparse adjacency matrix, removing edges
@@ -220,46 +276,174 @@ def compute_tfidf_cos(fieldX):
 
     return adj_mat
 
+# perform count vectorization and return count_data, words list
+def fit_count_vectorizer(field_list):
+    # find top 10 words by frequency
+    count_vectorizer = CountVectorizer()
+    count_data = count_vectorizer.fit_transform(field_list)
+
+    words = count_vectorizer.get_feature_names()
+
+    return count_data, words
+
+# optimize and create LDA model from vectorization
+def fit_LDA(count_data):
+    # create and fit LDA
+    # lda = LatentDirichletAllocation(n_components=100)
+
+    # optimize topics
+    # cv_t0 = time.time()
+    # lda_cv = GridSearchCV(lda, param_grid = {"n_components": [n for n in range(35, 105, 5)]}, n_jobs=4)
+    # lda_cv.fit(count_data)
+    # print(lda_cv.best_params_)
+    # print("GridSearch LDA Optimization:", str(time.time() - cv_t0))
+
+    # pick best LDA model
+    best_lda_t0 = time.time()
+    # best_lda = lda_cv.best_estimator_
+    best_lda = LatentDirichletAllocation(n_components=35, n_jobs=4)
+    lda_prob = best_lda.fit_transform(count_data)
+    print("Best LDA fit:", str(time.time() - best_lda_t0))
+
+    return best_lda, lda_prob
+
+# obtain a dictionary of top 10 count vectorization words
+def get_top_words_by_freq(count_data, words):
+    total_counts = np.zeros(len(words))
+    for t in count_data:
+        total_counts += t.toarray()[0]
+
+    count_dict = zip(words, total_counts)
+    count_dict = sorted(count_dict, key=lambda k: k[1], reverse=True)[0:10]
+    print(count_dict)
+
+    return count_dict
+
+# print all topics and top keywords for LDA
+def get_topics_word_dict(best_lda, words):
+    # print topics
+    for index, topic in enumerate(best_lda.components_):
+        print("Topic {}".format(index))
+        print(" ".join([words[i] for i in topic.argsort()[:-10 - 1: -1]]))
+
+    # create dictionary of topics
+    topics_dict = {}
+    for index, topic in enumerate(best_lda.components_):
+        topics_dict[index] = [words[i] for i in topic.argsort()[:-10 - 1: -1]]
+
+    print(topics_dict)
+
+    return topics_dict
+
+# align document topics to each document
+def create_doc_topic_cluster(best_lda, lda_prob):
+    topic_t0 = time.time()
+    topics = ["Topic" + str(i) for i in range(best_lda.n_components)]
+    docs = ["Doc" + str(i) for i in range(lda_prob.shape[0])]
+
+    doc_topic_df = pd.DataFrame(np.round(lda_prob, 2), columns=topics, index=docs)
+
+    # obtain most related topic to each
+    dominant_topic = np.argmax(doc_topic_df.values, axis=1)
+    dominant_probs = np.amax(doc_topic_df.values, axis=1)
+    doc_topic_df["dominant_topic"] = dominant_topic
+    doc_topic_df["max_probability"] = dominant_probs
+
+    print(doc_topic_df)
+    print(len(doc_topic_df))
+    print("Assign topics to document:", str(time.time() - topic_t0))
+
+    return dominant_topic
+
+# provide Birch cluster results (mini-kbatch clusters)
+def run_Birch_cluster(X):
+    brc = Birch(branching_factor=100, n_clusters=263, threshold=0.02, compute_labels=True)
+    brc.fit(X)
+
+    birch_clusters = brc.predict(X)
+    print(birch_clusters)
+    print("Total samples:", len(birch_clusters))
+    print(set(birch_clusters))
+    print("Birch:", len(list(set(birch_clusters))))
+
+    return birch_clusters
+
+# provide spectral model results with k clusters (KMeans-based, euclidean)
+def run_spectral_cluster(X):
+    spectral_t0 = time.time()
+    spectral_cluster = SpectralClustering(n_clusters=300).fit(X)
+    print(spectral_cluster.labels_)
+
+    print("Spectral:", str(time.time() - spectral_t0))
+
+    return spectral_cluster
+
 # provide DBSCAN model results using n_samples x n_features X
 def run_density_cluster(X):
-    # cluster into supernodes based on cosine distance, density/nearest neighbors: eps=.32
-    density_cluster = DBSCAN(eps=.15, min_samples=5, metric="cosine").fit(X)
-    print("Number of clusters:", str(len(set(density_cluster.labels_)) - 1))
-    print(list(density_cluster.labels_).count(-1))
+    n_cluster = 0
+    para = .05
+    for dist in np.arange(.02, .7, .02):
+        # cluster into supernodes based on cosine distance, density/nearest neighbors
+        density_cluster = DBSCAN(eps=dist, min_samples=5, metric="cosine").fit(X)
+        curr_cluster = len(set(density_cluster.labels_)) - 1
+        print("Number of clusters:", str(curr_cluster))
+        if curr_cluster >= n_cluster:
+            n_cluster = curr_cluster
+            para = dist
+        print(list(density_cluster.labels_).count(-1))
+
+    print("Best params:", str(para), "producing", str(n_cluster), "clusters")
+    density_cluster = DBSCAN(eps=para, min_samples=5, metric="cosine").fit(X)
 
     return density_cluster
 
-# build ordered dictionary of cluster: drug number pairs
-def build_ordered_cluster_dict(density_cluster_labels):
-    dict_t0 = time.time()
-    density_ref = {}
-    non_outlier_n = len(set(density_cluster_labels)) - 1  # start from viable end list of labels
+# rewrite the keys because they are not numbered completely consecutively, not assigned
+def reset_cluster_index(cluster_ref, topics_dict):
+    new_cluster_ref = {}
+    new_topics_dict = {}
 
-    for num, cluster in enumerate(density_cluster_labels):
+    # only based on cluster dict; cluster is the topic index
+    for i, cluster in enumerate(cluster_ref):
+        new_cluster_ref[i] = cluster_ref[cluster]
+        new_topics_dict[i] = topics_dict[cluster]
+
+    print("Reset dictionaries")
+    print(new_cluster_ref)
+    print(new_topics_dict)
+
+    return new_cluster_ref, new_topics_dict
+
+# build ordered dictionary of cluster: drug number pairs
+def build_ordered_cluster_dict(cluster_labels):
+    dict_t0 = time.time()
+    cluster_ref = {}
+    non_outlier_n = len(set(cluster_labels)) - 1  # start from viable end list of labels
+
+    for num, cluster in enumerate(cluster_labels):
         if cluster == -1:  # outliers are individual points
-            if non_outlier_n not in density_ref:
-                density_ref[non_outlier_n] = []
-            density_ref[non_outlier_n].append(num)
+            if non_outlier_n not in cluster_ref:
+                cluster_ref[non_outlier_n] = []
+            cluster_ref[non_outlier_n].append(num)
             non_outlier_n += 1
         else:
-            if cluster not in density_ref:
-                density_ref[cluster] = []
-            density_ref[cluster].append(num)
+            if cluster not in cluster_ref:
+                cluster_ref[cluster] = []
+            cluster_ref[cluster].append(num)
 
-    density_ref = OrderedDict(sorted(density_ref.items()))
+    cluster_ref = OrderedDict(sorted(cluster_ref.items()))
     print("Build dict:", str(time.time() - dict_t0))
-    print([str(cluster) + ": " + str(len(density_ref[cluster])) for cluster in density_ref])
+    print([str(cluster) + ": " + str(len(cluster_ref[cluster])) for cluster in cluster_ref])
 
-    return density_ref
+    return cluster_ref
 
 # calculate adjacency matrix of supernodes (clusters) by averaging all connections between the two clusters
-def calculate_super_adj_mat(density_ref, full_mat):
+def calculate_super_adj_mat(cluster_ref, full_mat):
     adj_t0 = time.time()
-    adj_mat = np.zeros((len(density_ref), len(density_ref)))
+    adj_mat = np.zeros((len(cluster_ref), len(cluster_ref)))
 
-    cluster_combs = itertools.combinations(density_ref.keys(), 2)
+    cluster_combs = itertools.combinations(cluster_ref.keys(), 2)
     for cluster1, cluster2 in cluster_combs:
-        drug_combs = list(itertools.product(density_ref[cluster1], density_ref[cluster2]))
+        drug_combs = list(itertools.product(cluster_ref[cluster1], cluster_ref[cluster2]))
         cos_sum = 0
         for drug1, drug2 in drug_combs:
             cos_sum += full_mat[drug1][drug2]
@@ -283,10 +467,10 @@ def weight_and_process_adj_mat(adj_mat):
     return adj_mat
 
 # create all attribute mappings for each cluster showing in graph
-def generate_super_attr_mappings(purpose_df, density_ref):
+def generate_super_attr_mappings(purpose_df, cluster_ref, *topics_dict):
     attr_t0 = time.time()
     # generate helper dictionary for list of ids per cluster: ordered
-    num_to_name = generate_cluster_num_to_name(purpose_df, density_ref)
+    num_to_name = generate_cluster_num_to_name(purpose_df, cluster_ref)
 
     attr_dict = {}  # attributes of nodes to be added
 
@@ -306,8 +490,12 @@ def generate_super_attr_mappings(purpose_df, density_ref):
             routes.append("...")
 
         attr_dict[cluster] = {"id": "Cluster " + str(i) if num_per_cluster > 1 else "Individual Drug",
-                              "num_drugs": num_per_cluster, "size_drugs": math.log(num_per_cluster) + 5,
+                              "num_drugs": num_per_cluster, "size_drugs": math.log(num_per_cluster) * 2 + 3,
                               "name": ", ".join(names), "route": ", ".join(routes)}
+
+        # if sorting by topics cluster, use dictionary in args tuple
+        if topics_dict:
+            attr_dict[cluster]["keywords"] = ", ".join(topics_dict[0][cluster])
 
     print(attr_dict)
 
@@ -380,13 +568,20 @@ def generate_purpose_graph(sparse_mat, attr_dict, num_to_name):
     return venn_G
 
 # plot graph of drugs in a particular purpose (bokeh)
-def generate_graph_plot(venn_G, purpose, field):
+def generate_graph_plot(venn_G, purpose, field, topics=False):
     # Display the network graph from the venn diagram interactions
     plot = figure(title="Network of Top Similar Drugs by Field", x_range=(-1000, 1000), y_range=(-1000, 1000),
                   tools="pan,lasso_select,box_select", toolbar_location="right")
+
+    # generate extra field for topic keywords
+    if topics:
+        node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("number of drugs", "@num_drugs"),
+                                            ("name", "@name"), ("route", "@route"),
+                                              ("keywords", "@keywords")], show_arrow=False)
     # generate hover capabilities
-    node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("number of drugs", "@num_drugs"),
-                                          ("name", "@name"), ("route", "@route")], show_arrow=False)
+    else:
+        node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("number of drugs", "@num_drugs"),
+                                              ("name", "@name"), ("route", "@route")], show_arrow=False)
     plot.add_tools(node_hover_tool, BoxZoomTool(), ResetTool())
 
     graph = from_networkx(venn_G, nx.fruchterman_reingold_layout, k=.25, scale=1000, center=(0, 0))
@@ -450,6 +645,19 @@ def perform_LSA(drug_df, field="purpose"):
 
     return lsa.fit_transform(purposeX)
 
+# save wordcloud of full purpose-field grouping
+def save_wordcloud(drug_df, purpose, field):
+    purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
+    test_str = " ".join(purpose_df[field].tolist())
+    print(test_str)
+
+    word_t0 = time.time()
+    wordcloud = WordCloud(background_color="white", max_words=5000, contour_color='steelblue')
+    wordcloud.generate(test_str)
+    wordcloud.to_file("static/" + "_".join(purpose.split()) + "-" + field + ".png")
+
+    print("WordCloud:", str(time.time() - word_t0))
+
 # main
 def main():
     # file read and setup
@@ -470,21 +678,33 @@ def main():
 
     # 3b. Automate process to obtain node network graphs of purpose_field combinations
     purposes = ["sunscreen purposes uses protectant skin"]
-    fields = ["indications_and_usage"]
+    fields = ["active_ingredient"]
 
     for purpose in purposes:
         for field in fields:
-            # 2b: Use purpose to find top products to compare
+            # # 2b: Use purpose to find top products to compare
+            # full_graph_t0 = time.time()
+            # # 3. Generate a graph node network of top products and their similarity to each other
+            # adj_mat, sparse_mat, attr_dict, num_to_name = \
+            #     generate_similarity_matching_field_of_purpose(drug_df, purpose, field)
+            #
+            # # create graph
+            # venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
+            # print("Time to build graph:", str(time.time() - full_graph_t0))
+            #
+            # generate_graph_plot(venn_G, purpose, field)
+            # print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
+
             full_graph_t0 = time.time()
             # 3. Generate a graph node network of top products and their similarity to each other
             adj_mat, sparse_mat, attr_dict, num_to_name = \
-                generate_similarity_matching_field_of_purpose(drug_df, purpose, field)
+                generate_topics_matching_field_of_purpose(drug_df, purpose, field)
 
             # create graph
             venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
             print("Time to build graph:", str(time.time() - full_graph_t0))
 
-            generate_graph_plot(venn_G, purpose, field)
+            generate_graph_plot(venn_G, purpose, field, topics=True)
             print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
     # 4: plot heatmap using adjacency matrix for all matches
@@ -493,6 +713,13 @@ def main():
 
     # 5: Check dimensionality reduction (not plottable...)
     # perform_LSA(drug_df, field="purpose")
+
+    # 6: Plot word cloud
+    purpose = "sunscreen purposes uses protectant skin"
+    field = "active_ingredient"
+
+    # save word cloud for purpose cluster - field combo
+    save_wordcloud(drug_df, purpose, field)
 
 if __name__ == "__main__":
     main()
