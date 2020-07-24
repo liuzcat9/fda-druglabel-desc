@@ -5,14 +5,21 @@
 <p><b>Field:</b> {{ field }}</p>
 
 <img src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_file3 }}"/>
-<div class="embed-responsive embed-responsive-4by3">
-    <iframe class="embed-responsive-item"
+<img class="loading-image" src="{{ url_for('static', filename='loading.gif') }}"/>
+    <div class="embed-responsive embed-responsive-1by1">
+    <iframe class="embed-responsive-item bokeh-html"
             src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_file }}"></iframe>
 </div>
-
-<div class="embed-responsive embed-responsive-4by3">
-    <iframe class="embed-responsive-item"
+<div class="embed-responsive embed-responsive-1by1">
+        <iframe class="embed-responsive-item bokeh-html"
             src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_file2 }}"></iframe>
 </div>
 
+<script>
+    $(document).ready(function () {
+    $(".embed-responsive-item").on("load", function () {
+        $(".loading-image").hide();
+});
+});
+</script>
 {% endblock %}
