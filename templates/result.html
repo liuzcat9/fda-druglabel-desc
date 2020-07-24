@@ -4,6 +4,9 @@
 <p><b>Purpose:</b> {{ purpose }}</p>
 <p><b>Field:</b> {{ field }}</p>
 
+{{ bokeh_div | safe }}
+{{ bokeh_script | safe }}
+
 <img src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_file3 }}"/>
 <img class="loading-image" src="{{ url_for('static', filename='loading.gif') }}"/>
     <div class="embed-responsive embed-responsive-1by1">

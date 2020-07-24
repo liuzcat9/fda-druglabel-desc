@@ -600,7 +600,7 @@ def generate_graph_plot(venn_G, purpose, field, topics=False):
 
     script, div = components(plot)
 
-    output_file("static/" + purpose + "-" + field + ".html")
+    # output_file("static/" + purpose + "-" + field + ".html")
     show(plot)
 
     return script, div
@@ -657,6 +657,27 @@ def save_wordcloud(drug_df, purpose, field):
     wordcloud.to_file("static/" + "_".join(purpose.split()) + "-" + field + ".png")
 
     print("WordCloud:", str(time.time() - word_t0))
+
+# create web-app-friendly pathway to build network graph
+def create_web_graph(purpose, field):
+    json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
+                 "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
+                 "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
+    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
+
+    full_graph_t0 = time.time()
+    # 3. Generate a graph node network of top products and their similarity to each other
+    adj_mat, sparse_mat, attr_dict, num_to_name = \
+        generate_topics_matching_field_of_purpose(drug_df, purpose, field)
+
+    # create graph
+    venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
+    print("Time to build graph:", str(time.time() - full_graph_t0))
+
+    script, div = generate_graph_plot(venn_G, purpose, field, topics=True)
+    print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
+
+    return script, div
 
 # main
 def main():
