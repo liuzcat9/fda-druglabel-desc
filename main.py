@@ -158,88 +158,54 @@ def find_matching_field_for_product(drug_df, similar_products, original, field):
     return top_indic_df
 
 # Generate tdidf method for cluster similarity
-def generate_similarity_matching_field_of_purpose(drug_df, purpose, field):
-    # obtain all fields of similar_products (only relevant products to purpose)
-    purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
-    print("Valid rows:", str(len(purpose_df)))
-
+def generate_similarity_matching_field_of_purpose(purpose_df, field, topics=True):
     field_list = purpose_df[field].tolist()
     print(field_list[0:10])
 
+    # TD-IDF matrix will be used for cluster choice and for matrix similarity
     fieldX = create_tfidf(field_list)
-
     print(fieldX.shape)
-    print(purpose_df)
+    print(purpose_df.head())
 
-    # run density model
-    density_cluster = run_density_cluster(fieldX)
-    # fieldX = perform_LSA(purpose_df, field)
-    # density_cluster = run_spectral_cluster(fieldX)
+    if topics:
+        # preprocess for LDA
+        count_data, words = fit_count_vectorizer(field_list)
+
+        best_lda, lda_prob = fit_LDA(count_data)
+        print(lda_prob)
+
+        topics_dict = get_topics_word_dict(best_lda, words)
+
+        # create documents (in order) clustered into topics
+        labels = create_doc_topic_cluster(best_lda, lda_prob)
+        print(labels)
+    else:
+        # run density model
+        density_cluster = run_density_cluster(fieldX)
+        labels = density_cluster.labels_
 
     # build ordered dictionary of cluster:corresponding drug numbers
-    density_ref = build_ordered_cluster_dict(density_cluster.labels_)
+    cluster_ref = build_ordered_cluster_dict(labels)
+
+    if topics:
+        # some documents are not assigned to all topics, so reset index
+        cluster_ref, topics_dict = reset_cluster_index(cluster_ref, topics_dict)
 
     # calculate adjacency matrix of supernodes by averaging cosine similarity of edges in cluster
     full_mat = compute_tfidf_cos(fieldX) # each individual pairwise cosine similarity
-    adj_mat = calculate_super_adj_mat(density_ref, full_mat)
+    adj_mat = calculate_super_adj_mat(cluster_ref, full_mat)
 
-    # add weights now
-    adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
-
-    # create mapping dictionaries for cluster-based graph
-    num_to_cluster, attr_dict = generate_super_attr_mappings(purpose_df, density_ref)
+    if topics:
+        # create mapping dictionaries for cluster-based graph
+        num_to_cluster, attr_dict = generate_super_attr_mappings(purpose_df, cluster_ref, topics_dict)
+    else:
+        # create mapping dictionaries for cluster-based graph
+        num_to_cluster, attr_dict = generate_super_attr_mappings(purpose_df, cluster_ref)
 
     # adj_mat = weight_and_process_adj_mat(adj_mat)
 
     # assign attributes
     # num_to_name, attr_dict = generate_attr_mappings(purpose_df)
-
-    # generate graph with top n edges per node weighted by similarity
-    # create sparse adjacency matrix, removing edges
-    max_n = 8
-    sparse_mat = restrict_adjacency_matrix(adj_mat, max_n if adj_mat.shape[0] >= max_n else adj_mat.shape[0])
-
-    print(adj_mat, adj_mat.shape)
-    print(sparse_mat)
-
-    return (adj_mat, sparse_mat, attr_dict, num_to_cluster)
-
-# Generate tdidf method using topic "prediction" nodes
-def generate_topics_matching_field_of_purpose(purpose_df, field):
-    purpose_df = purpose_df.dropna(subset=[field])
-    field_list = purpose_df[field].tolist()
-    print(field_list[0:10])
-
-    print(purpose_df.head())
-
-    # preprocess for LDA
-    count_data, words = fit_count_vectorizer(field_list)
-
-    best_lda, lda_prob = fit_LDA(count_data)
-    print(lda_prob)
-
-    topics_dict = get_topics_word_dict(best_lda, words)
-
-    # create documents (in order) clustered into topics
-    doc_topic_list = create_doc_topic_cluster(best_lda, lda_prob)
-    print(doc_topic_list)
-
-    # build ordered dictionary of cluster:corresponding drug numbers
-    cluster_ref = build_ordered_cluster_dict(doc_topic_list)
-
-    # some documents are not assigned to all topics, so reset index
-    cluster_ref, topics_dict = reset_cluster_index(cluster_ref, topics_dict)
-
-    # calculate adjacency matrix of supernodes by averaging cosine similarity of edges in cluster
-    fieldX = create_tfidf(field_list)
-    full_mat = compute_tfidf_cos(fieldX) # each individual pairwise cosine similarity
-    adj_mat = calculate_super_adj_mat(cluster_ref, full_mat)
-
-    # add weights now
-    adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
-
-    # create mapping dictionaries for cluster-based graph
-    num_to_cluster, attr_dict = generate_super_attr_mappings(purpose_df, cluster_ref, topics_dict)
 
     # generate graph with top n edges per node weighted by similarity
     # create sparse adjacency matrix, removing edges
@@ -450,6 +416,9 @@ def calculate_super_adj_mat(cluster_ref, full_mat):
 
     print("Build super adjacency matrix:", str(time.time() - adj_t0))
 
+    # add weights now
+    adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
+
     return adj_mat
 
 # general function to add weights and reduce adjacency matrix for networkx
@@ -597,8 +566,8 @@ def generate_graph_plot(venn_G, purpose, field, topics=False):
 
     script, div = components(plot)
 
-    # output_file("static/" + "_".join(purpose.split()) + "-" + field + ".html")
-    # save(plot)
+    output_file("static/purpose-field/" + "_".join(purpose.split()) + "-" + field + ".html")
+    save(plot)
     # show(plot)
 
     return script, div
@@ -644,8 +613,7 @@ def perform_LSA(drug_df, field="purpose"):
     return lsa.fit_transform(purposeX)
 
 # save wordcloud of full purpose-field grouping
-def save_wordcloud(drug_df, purpose, field):
-    purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
+def save_wordcloud(purpose_df, purpose, field):
     test_str = " ".join(purpose_df[field].tolist())
     print(test_str)
 
@@ -663,7 +631,7 @@ def create_web_graph(purpose, field):
     full_graph_t0 = time.time()
     # 3. Generate a graph node network of top products and their similarity to each other
     adj_mat, sparse_mat, attr_dict, num_to_name = \
-        generate_topics_matching_field_of_purpose(purpose_df, field)
+        generate_similarity_matching_field_of_purpose(purpose_df, field)
 
     # create graph
     venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
@@ -682,8 +650,6 @@ def main():
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
     drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
 
-    preprocessing.write_purpose_clusters_to_df(drug_df)
-
     print(drug_df[0:10]) # verify read
 
     # # 1: generate key purposes
@@ -698,16 +664,18 @@ def main():
     purposes = preprocessing.find_unique_purposes(drug_df)
     fields = ["active_ingredient", "inactive_ingredient", "warnings", "dosage_and_administration", "indications_and_usage"]
 
-    purpose = "sunscreen purposes uses protectant skin"
-    field = "active_ingredient"
+    # purposes = ["sunscreen purposes uses protectant skin"]
+    # fields = ["indications_and_usage"]
 
     for purpose in purposes:
         for field in fields:
+            purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
+
             # # 2b: Use purpose to find top products to compare
             # full_graph_t0 = time.time()
             # # 3. Generate a graph node network of top products and their similarity to each other
             # adj_mat, sparse_mat, attr_dict, num_to_name = \
-            #     generate_similarity_matching_field_of_purpose(drug_df, purpose, field)
+            #     generate_similarity_matching_field_of_purpose(purpose_df, field, topics=False)
             #
             # # create graph
             # venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
@@ -717,10 +685,9 @@ def main():
             # print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
             full_graph_t0 = time.time()
-            purpose_df = pd.read_pickle("pkl/purpose/" + "_".join(purpose.split()) + ".pkl")
             # 3. Generate a graph node network of top products and their similarity to each other
             adj_mat, sparse_mat, attr_dict, num_to_name = \
-                generate_topics_matching_field_of_purpose(purpose_df, field)
+                generate_similarity_matching_field_of_purpose(purpose_df, field)
 
             # create graph
             venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
@@ -731,7 +698,7 @@ def main():
 
             # 6: Plot word cloud
             # save word cloud for purpose cluster - field combo
-            save_wordcloud(drug_df, purpose, field)
+            save_wordcloud(purpose_df, purpose, field)
 
     # 4: plot heatmap using adjacency matrix for all matches
     # TODO: fix name reference

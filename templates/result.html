@@ -4,18 +4,17 @@
 <p><b>Purpose:</b> {{ purpose }}</p>
 <p><b>Field:</b> {{ field }}</p>
 
-{{ bokeh_div | safe }}
-{{ bokeh_script | safe }}
-
-<img src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_file3 }}"/>
-<img class="loading-image" src="{{ url_for('static', filename='loading.gif') }}"/>
-    <div class="embed-responsive embed-responsive-1by1">
-    <iframe class="embed-responsive-item bokeh-html"
-            src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_file }}"></iframe>
-</div>
-<div class="embed-responsive embed-responsive-1by1">
-        <iframe class="embed-responsive-item bokeh-html"
-            src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_file2 }}"></iframe>
+<div class="row">
+    <div class="col-lg">
+        <div class="embed-responsive embed-responsive-1by1" style="width: 100%;">
+            <img class="loading-image" src="{{ url_for('static', filename='loading.gif') }}"/>
+            <iframe class="embed-responsive-item"
+                    src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_html }}"></iframe>
+        </div>
+    </div>
+    <div class="col-sm">
+        <img src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_png }}"/>
+    </div>
 </div>
 
 <script>
@@ -24,5 +23,7 @@
         $(".loading-image").hide();
 });
 });
+
+
 </script>
 {% endblock %}
