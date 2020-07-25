@@ -16,8 +16,8 @@ from bokeh.io import output_file, show
 from bokeh.models import (BoxZoomTool, Circle, HoverTool,
                           MultiLine, Plot, Range1d, ResetTool,
                           NodesAndLinkedEdges, EdgesAndLinkedNodes, ColumnDataSource)
-from bokeh.plotting import figure, from_networkx
-from bokeh.embed import components, file_html
+from bokeh.plotting import figure, from_networkx, output_file, save
+from bokeh.embed import components
 
 from wordcloud import WordCloud
 
@@ -196,7 +196,8 @@ def generate_similarity_matching_field_of_purpose(drug_df, purpose, field):
 
     # generate graph with top n edges per node weighted by similarity
     # create sparse adjacency matrix, removing edges
-    sparse_mat = restrict_adjacency_matrix(adj_mat, 8)
+    max_n = 8
+    sparse_mat = restrict_adjacency_matrix(adj_mat, max_n if adj_mat.shape[0] >= max_n else adj_mat.shape[0])
 
     print(adj_mat, adj_mat.shape)
     print(sparse_mat)
@@ -247,7 +248,8 @@ def generate_topics_matching_field_of_purpose(drug_df, purpose, field):
 
     # generate graph with top n edges per node weighted by similarity
     # create sparse adjacency matrix, removing edges
-    sparse_mat = restrict_adjacency_matrix(adj_mat, 8)
+    max_n = 8
+    sparse_mat = restrict_adjacency_matrix(adj_mat, max_n if adj_mat.shape[0] >= max_n else adj_mat.shape[0])
 
     print(adj_mat, adj_mat.shape)
     print(sparse_mat)
@@ -551,7 +553,6 @@ def restrict_adjacency_matrix(adj_mat, n_max):
                            ::-1]  # max n edges per node by weight (duplicate possible)
         for adj_node_i in adj_node_indexes:
             sparse_mat[current_node_i][adj_node_i] = adj_mat[current_node_i][adj_node_i]
-            sparse_mat[adj_node_i][current_node_i] = adj_mat[current_node_i][adj_node_i]
 
     print("Narrow adjacency matrix: ", str(time.time() - narrow_t0))
 
@@ -570,7 +571,8 @@ def generate_purpose_graph(sparse_mat, attr_dict, num_to_name):
 # plot graph of drugs in a particular purpose (bokeh)
 def generate_graph_plot(venn_G, purpose, field, topics=False):
     # Display the network graph from the venn diagram interactions
-    plot = figure(title="Network of Top Similar Drugs by Field", x_range=(-1000, 1000), y_range=(-1000, 1000),
+    plot = figure(title="Network of Top Similar Drugs by " + " ".join([word.capitalize() for word in field.split("_")]),
+                  x_range=(-1000, 1000), y_range=(-1000, 1000),
                   tools="pan,lasso_select,box_select", toolbar_location="right")
 
     # generate extra field for topic keywords
@@ -600,8 +602,9 @@ def generate_graph_plot(venn_G, purpose, field, topics=False):
 
     script, div = components(plot)
 
-    # output_file("static/" + purpose + "-" + field + ".html")
-    show(plot)
+    output_file("static/" + "_".join(purpose.split()) + "-" + field + ".html")
+    save(plot)
+    # show(plot)
 
     return script, div
 
@@ -679,6 +682,10 @@ def create_web_graph(purpose, field):
 
     return script, div
 
+# return a list of all purpose clusters
+def find_unique_purposes(drug_df):
+    return list(drug_df.purpose_cluster.unique())
+
 # main
 def main():
     # file read and setup
@@ -698,8 +705,8 @@ def main():
     # draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
 
     # 3b. Automate process to obtain node network graphs of purpose_field combinations
-    purposes = ["sunscreen purposes uses protectant skin"]
-    fields = ["active_ingredient"]
+    purposes = find_unique_purposes(drug_df)
+    fields = ["active_ingredient", "inactive_ingredient", "warnings", "dosage_and_administration", "indications_and_usage"]
 
     for purpose in purposes:
         for field in fields:
@@ -728,19 +735,16 @@ def main():
             generate_graph_plot(venn_G, purpose, field, topics=True)
             print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
+            # 6: Plot word cloud
+            # save word cloud for purpose cluster - field combo
+            save_wordcloud(drug_df, purpose, field)
+
     # 4: plot heatmap using adjacency matrix for all matches
     # TODO: fix name reference
     # plot_adj_mat_heatmap(adj_mat, attr_dict, similar_products)
 
     # 5: Check dimensionality reduction (not plottable...)
     # perform_LSA(drug_df, field="purpose")
-
-    # 6: Plot word cloud
-    purpose = "sunscreen purposes uses protectant skin"
-    field = "active_ingredient"
-
-    # save word cloud for purpose cluster - field combo
-    save_wordcloud(drug_df, purpose, field)
 
 if __name__ == "__main__":
     main()
