@@ -205,20 +205,15 @@ def generate_similarity_matching_field_of_purpose(drug_df, purpose, field):
     return (adj_mat, sparse_mat, attr_dict, num_to_cluster)
 
 # Generate tdidf method using topic "prediction" nodes
-def generate_topics_matching_field_of_purpose(drug_df, purpose, field):
-    # obtain all fields of similar_products (only relevant products to purpose)
-    purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
-    print("Valid rows:", str(len(purpose_df)))
-
+def generate_topics_matching_field_of_purpose(purpose_df, field):
+    purpose_df = purpose_df.dropna(subset=[field])
     field_list = purpose_df[field].tolist()
     print(field_list[0:10])
 
-    print(purpose_df)
+    print(purpose_df.head())
 
     # preprocess for LDA
     count_data, words = fit_count_vectorizer(field_list)
-
-    count_dict = get_top_words_by_freq(count_data, words)
 
     best_lda, lda_prob = fit_LDA(count_data)
     print(lda_prob)
@@ -602,8 +597,8 @@ def generate_graph_plot(venn_G, purpose, field, topics=False):
 
     script, div = components(plot)
 
-    output_file("static/" + "_".join(purpose.split()) + "-" + field + ".html")
-    save(plot)
+    # output_file("static/" + "_".join(purpose.split()) + "-" + field + ".html")
+    # save(plot)
     # show(plot)
 
     return script, div
@@ -663,15 +658,12 @@ def save_wordcloud(drug_df, purpose, field):
 
 # create web-app-friendly pathway to build network graph
 def create_web_graph(purpose, field):
-    json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
-                 "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
-                 "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
-    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
+    purpose_df = pd.read_pickle("pkl/purpose/" + "_".join(purpose.split()) + ".pkl")
 
     full_graph_t0 = time.time()
     # 3. Generate a graph node network of top products and their similarity to each other
     adj_mat, sparse_mat, attr_dict, num_to_name = \
-        generate_topics_matching_field_of_purpose(drug_df, purpose, field)
+        generate_topics_matching_field_of_purpose(purpose_df, field)
 
     # create graph
     venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
@@ -682,10 +674,6 @@ def create_web_graph(purpose, field):
 
     return script, div
 
-# return a list of all purpose clusters
-def find_unique_purposes(drug_df):
-    return list(drug_df.purpose_cluster.unique())
-
 # main
 def main():
     # file read and setup
@@ -693,6 +681,8 @@ def main():
                  "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
     drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
+
+    preprocessing.write_purpose_clusters_to_df(drug_df)
 
     print(drug_df[0:10]) # verify read
 
@@ -705,8 +695,11 @@ def main():
     # draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
 
     # 3b. Automate process to obtain node network graphs of purpose_field combinations
-    purposes = find_unique_purposes(drug_df)
+    purposes = preprocessing.find_unique_purposes(drug_df)
     fields = ["active_ingredient", "inactive_ingredient", "warnings", "dosage_and_administration", "indications_and_usage"]
+
+    purpose = "sunscreen purposes uses protectant skin"
+    field = "active_ingredient"
 
     for purpose in purposes:
         for field in fields:
@@ -724,9 +717,10 @@ def main():
             # print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
             full_graph_t0 = time.time()
+            purpose_df = pd.read_pickle("pkl/purpose/" + "_".join(purpose.split()) + ".pkl")
             # 3. Generate a graph node network of top products and their similarity to each other
             adj_mat, sparse_mat, attr_dict, num_to_name = \
-                generate_topics_matching_field_of_purpose(drug_df, purpose, field)
+                generate_topics_matching_field_of_purpose(purpose_df, field)
 
             # create graph
             venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)

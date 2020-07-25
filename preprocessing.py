@@ -1,4 +1,5 @@
 import time
+import os
 from spacy.lang.en import English
 import pandas as pd
 
@@ -123,3 +124,20 @@ def cluster_purpose(drug_df):
     print(drug_df["purpose_cluster"])
 
     return drug_df
+
+# return a list of all purpose clusters
+def find_unique_purposes(drug_df):
+    return list(drug_df.purpose_cluster.unique())
+
+# function to write individual (smaller purpose chunks of dataframe to disk)
+def write_purpose_clusters_to_df(drug_df):
+    purposes = find_unique_purposes(drug_df)
+    for purpose in purposes:
+        purpose_key = "_".join(purpose.split())
+        if not os.path.isfile("pkl/purpose/" + purpose_key + ".pkl"):
+            purpose_df = drug_df.dropna(
+                subset=["id", "brand_name", "route", "product_type"])  # exclude all rows with columns of null
+
+            purpose_df = purpose_df.loc[purpose_df["purpose_cluster"].str.contains(purpose)]
+            print(purpose_df.head())
+            purpose_df.to_pickle("pkl/purpose/" + purpose_key + ".pkl")
