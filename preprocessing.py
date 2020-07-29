@@ -1,29 +1,30 @@
 import time
 import os
-from spacy.lang.en import English
 import pandas as pd
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 
-# custom files
-import parse_json
+import spacy
 
 # Takes in a list
-# Removes the word "Purpose" and punctuation
+# Removes the word "purpose" and "use" and punctuation
+# Lemmatizes tokens
 # Returns cleaned list
 def clean_list(purpose_str, nlp):
-    temp_doc = nlp(purpose_str)
+    temp_doc = nlp(purpose_str.lower()) # set lowercase to not confuse lemmatization
+    additional = ["purpose", "use"]
 
     # tokenize excluding punctuation
-    cleaned_list = [token.text.lower() for token in temp_doc
-                    if not(token.is_stop or token.is_punct or token.is_space or token.text.lower() == "purpose")]
+    cleaned_list = [token.lemma_ for token in temp_doc
+                    if not(token.is_stop or token.is_punct or token.is_space
+                           or token.lemma_ in additional)]
     return cleaned_list
 
 # Uses spacy to clean all words in all relevant columns
 def tokenize_columns(drug_df, columns_to_tokenize):
     tokenize_t0 = time.time()
-    nlp = English()
+    nlp = spacy.load("en_core_web_sm")
 
     for column in columns_to_tokenize:
         new_col = []

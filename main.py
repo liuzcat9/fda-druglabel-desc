@@ -22,7 +22,6 @@ from bokeh.embed import components
 from wordcloud import WordCloud
 
 import spacy
-from spacy.lang.en import English
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity, cosine_distances, linear_kernel
@@ -133,7 +132,7 @@ def find_similar_products_from_product_purpose(drug_df, original_purpose_list, o
 # helper function to count and record matching words/total words in indications and usage field
 # returns: dictionary of product names and counts of matches
 def find_matching_field_for_product(drug_df, similar_products, original, field):
-    nlp = English()
+    nlp = spacy.load("en_core_web_sm")
     valid_df = drug_df.dropna(subset=["id", "purpose", "brand_name", field])  # exclude all rows with relevant columns of null
     valid_df = valid_df.loc[valid_df["id"] != original]  # exclude self
 
@@ -264,7 +263,9 @@ def fit_LDA(count_data):
     # pick best LDA model
     best_lda_t0 = time.time()
     # best_lda = lda_cv.best_estimator_
-    best_lda = LatentDirichletAllocation(n_components=35, n_jobs=4)
+    # select a visually appealing number of "topics"
+    num_comp = int(count_data.shape[0] / 100) + 5
+    best_lda = LatentDirichletAllocation(n_components=num_comp, n_jobs=4)
     lda_prob = best_lda.fit_transform(count_data)
     print("Best LDA fit:", str(time.time() - best_lda_t0))
 
@@ -566,9 +567,9 @@ def generate_graph_plot(venn_G, purpose, field, topics=False):
 
     script, div = components(plot)
 
-    output_file("static/purpose-field/" + "_".join(purpose.split()) + "-" + field + ".html")
-    save(plot)
-    # show(plot)
+    # output_file("static/purpose-field/" + "_".join(purpose.split()) + "-" + field + ".html")
+    # save(plot)
+    show(plot)
 
     return script, div
 
@@ -664,8 +665,8 @@ def main():
     purposes = preprocessing.find_unique_purposes(drug_df)
     fields = ["active_ingredient", "inactive_ingredient", "warnings", "dosage_and_administration", "indications_and_usage"]
 
-    # purposes = ["sunscreen purposes uses protectant skin"]
-    # fields = ["indications_and_usage"]
+    purposes = ["sanitizer hand antiseptic antimicrobial skin"]
+    fields = ["indications_and_usage", "warnings"]
 
     for purpose in purposes:
         for field in fields:
