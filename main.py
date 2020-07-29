@@ -12,11 +12,14 @@ import itertools
 
 import numpy as np
 import networkx as nx
+from bokeh import events
 from bokeh.io import output_file, show
-from bokeh.models import (BoxZoomTool, Circle, HoverTool,
+from bokeh.models import (BoxZoomTool, Circle, HoverTool, TapTool,
                           MultiLine, Plot, Range1d, ResetTool,
-                          NodesAndLinkedEdges, EdgesAndLinkedNodes, ColumnDataSource)
+                          NodesAndLinkedEdges, EdgesAndLinkedNodes, ColumnDataSource,
+                          CustomJS, Div)
 from bokeh.plotting import figure, from_networkx, output_file, save
+from bokeh.layouts import column, row
 from bokeh.embed import components
 
 from wordcloud import WordCloud
@@ -196,10 +199,10 @@ def generate_similarity_matching_field_of_purpose(purpose_df, field, topics=True
 
     if topics:
         # create mapping dictionaries for cluster-based graph
-        num_to_cluster, attr_dict = generate_super_attr_mappings(purpose_df, cluster_ref, topics_dict)
+        num_to_cluster, num_to_brand, attr_dict = generate_super_attr_mappings(purpose_df, cluster_ref, topics_dict)
     else:
         # create mapping dictionaries for cluster-based graph
-        num_to_cluster, attr_dict = generate_super_attr_mappings(purpose_df, cluster_ref)
+        num_to_cluster, num_to_brand, attr_dict = generate_super_attr_mappings(purpose_df, cluster_ref)
 
     # adj_mat = weight_and_process_adj_mat(adj_mat)
 
@@ -214,7 +217,7 @@ def generate_similarity_matching_field_of_purpose(purpose_df, field, topics=True
     print(adj_mat, adj_mat.shape)
     print(sparse_mat)
 
-    return (adj_mat, sparse_mat, attr_dict, num_to_cluster)
+    return (adj_mat, sparse_mat, attr_dict, num_to_cluster, num_to_brand)
 
 # create TF-IDF for any list of text entries
 def create_tfidf(field_list):
@@ -437,7 +440,8 @@ def weight_and_process_adj_mat(adj_mat):
 def generate_super_attr_mappings(purpose_df, cluster_ref, *topics_dict):
     attr_t0 = time.time()
     # generate helper dictionary for list of ids per cluster: ordered
-    num_to_name = generate_cluster_num_to_name(purpose_df, cluster_ref)
+    num_to_name = generate_cluster_num_to_field(purpose_df, cluster_ref)
+    num_to_brand = generate_cluster_num_to_field(purpose_df, cluster_ref, field="brand_name")
 
     attr_dict = {}  # attributes of nodes to be added
 
@@ -471,18 +475,18 @@ def generate_super_attr_mappings(purpose_df, cluster_ref, *topics_dict):
     num_to_cluster = {cluster: info["id"] for cluster, info in attr_dict.items()}
     print("num_to_cluster:", num_to_cluster)
 
-    return num_to_cluster, attr_dict
+    return num_to_cluster, num_to_brand, attr_dict
 
-# generate dictionary of cluster: [ids of drugs]
-def generate_cluster_num_to_name(purpose_df, density_ref):
+# generate dictionary of cluster: [ids of drugs] or [field of drugs] as specified
+def generate_cluster_num_to_field(purpose_df, density_ref, field="id"):
     num_to_name = {}
     # create mapping dictionaries
-    # post cluster: [drug ids]
+    # post cluster: [drug ids] or [drug fields]
     for cluster, drug_list in density_ref.items():
         if cluster not in num_to_name:
             num_to_name[cluster] = []
         for drug in drug_list:
-            num_to_name[cluster].append(purpose_df.iloc[drug]["id"])
+            num_to_name[cluster].append(purpose_df.iloc[drug][field])
 
     print(num_to_name)
 
@@ -534,11 +538,15 @@ def generate_purpose_graph(sparse_mat, attr_dict, num_to_name):
     return venn_G
 
 # plot graph of drugs in a particular purpose (bokeh)
-def generate_graph_plot(venn_G, purpose, field, topics=False):
+def generate_graph_plot(venn_G, purpose, field, num_to_brand, topics=False):
     # Display the network graph from the venn diagram interactions
     plot = figure(title="Network of Top Similar Drugs by " + " ".join([word.capitalize() for word in field.split("_")]),
                   x_range=(-1000, 1000), y_range=(-1000, 1000),
                   tools="pan,lasso_select,box_select", toolbar_location="right")
+
+    # create general layout
+    drug_panel = Div(width=400, height=plot.plot_height, height_policy="fixed")
+    layout = row(plot, drug_panel, height=600, height_policy="fixed")
 
     # generate extra field for topic keywords
     if topics:
@@ -549,7 +557,26 @@ def generate_graph_plot(venn_G, purpose, field, topics=False):
     else:
         node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("number of drugs", "@num_drugs"),
                                               ("name", "@name"), ("route", "@route")], show_arrow=False)
-    plot.add_tools(node_hover_tool, BoxZoomTool(), ResetTool())
+
+    # create tool to list drug names when node for topic is clicked
+    callback_tap_tool = CustomJS(args=dict(div=drug_panel), code="""
+console.log(cb_data.source.selected.indices);
+console.log(cb_obj)
+var names = %s;
+var names_str = "";
+var cluster_i = cb_data.source.selected.indices[0];
+console.log(cluster_i)
+    for (var name_i = 0; name_i < names[cluster_i].length; name_i ++) {
+        names_str += "<ul>" + names[cluster_i][name_i] + "</ul>";
+    }
+div.text = "<div style='height: 600px; display: block; overflow: auto;'>"
++ "<b>Products (Brand Name)</b><br/>"
++ names_str + "</div>";
+div.text = div.text.concat(line);
+    """ % (list(num_to_brand.values())))
+
+    plot.add_tools(node_hover_tool, BoxZoomTool(), ResetTool(),
+                   TapTool(callback=callback_tap_tool))
 
     graph = from_networkx(venn_G, nx.fruchterman_reingold_layout, k=.25, scale=1000, center=(0, 0))
 
@@ -561,15 +588,16 @@ def generate_graph_plot(venn_G, purpose, field, topics=False):
     # change size of node with cluster
     graph.node_renderer.glyph = Circle(size="size_drugs", fill_color="pink")
     graph.edge_renderer.hover_glyph = MultiLine(line_color="red", line_width={'field': 'weight'})
+    graph.selection_policy = NodesAndLinkedEdges()
     graph.inspection_policy = NodesAndLinkedEdges()
 
     plot.renderers.append(graph)
 
-    script, div = components(plot)
+    script, div = components(layout)
 
     # output_file("static/purpose-field/" + "_".join(purpose.split()) + "-" + field + ".html")
-    # save(plot)
-    show(plot)
+    # save(layout)
+    show(layout)
 
     return script, div
 
@@ -631,7 +659,7 @@ def create_web_graph(purpose, field):
 
     full_graph_t0 = time.time()
     # 3. Generate a graph node network of top products and their similarity to each other
-    adj_mat, sparse_mat, attr_dict, num_to_name = \
+    adj_mat, sparse_mat, attr_dict, num_to_name, num_to_brand = \
         generate_similarity_matching_field_of_purpose(purpose_df, field)
 
     # create graph
@@ -666,7 +694,7 @@ def main():
     fields = ["active_ingredient", "inactive_ingredient", "warnings", "dosage_and_administration", "indications_and_usage"]
 
     purposes = ["sanitizer hand antiseptic antimicrobial skin"]
-    fields = ["indications_and_usage", "warnings"]
+    fields = ["indications_and_usage"]
 
     for purpose in purposes:
         for field in fields:
@@ -687,19 +715,19 @@ def main():
 
             full_graph_t0 = time.time()
             # 3. Generate a graph node network of top products and their similarity to each other
-            adj_mat, sparse_mat, attr_dict, num_to_name = \
+            adj_mat, sparse_mat, attr_dict, num_to_name, num_to_brand = \
                 generate_similarity_matching_field_of_purpose(purpose_df, field)
 
             # create graph
             venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
             print("Time to build graph:", str(time.time() - full_graph_t0))
 
-            generate_graph_plot(venn_G, purpose, field, topics=True)
+            generate_graph_plot(venn_G, purpose, field, num_to_brand, topics=True)
             print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
             # 6: Plot word cloud
             # save word cloud for purpose cluster - field combo
-            save_wordcloud(purpose_df, purpose, field)
+            # save_wordcloud(purpose_df, purpose, field)
 
     # 4: plot heatmap using adjacency matrix for all matches
     # TODO: fix name reference
