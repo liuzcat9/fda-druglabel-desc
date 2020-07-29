@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, url_for
 import sys, time
 
 import observe_data, main, preprocessing, parse_json
@@ -73,10 +73,16 @@ def result():
     if request.method == 'POST':
         purpose = request.form["purpose_res"]
         field = request.form["field_res"]
-        output_html = "_".join(purposes[purpose].split()) + "-" + "_".join(fields[field].split()) + ".html"
-        output_png = "_".join(purposes[purpose].split()) + "-" + "_".join(fields[field].split()) + ".png"
 
         print("File retrieved should be:", "_".join(purposes[purpose].split()) + "-" + "_".join(fields[field].split()))
+
+    # redirection needed from POST for dynamic url
+    return redirect(url_for('.load_result', purpose=purpose, field=field))
+
+@app.route('/res/<purpose>/<field>')
+def load_result(purpose, field):
+    output_html = "_".join(purposes[purpose].split()) + "-" + "_".join(fields[field].split()) + ".html"
+    output_png = "_".join(purposes[purpose].split()) + "-" + "_".join(fields[field].split()) + ".png"
 
     return render_template('result.html', purpose=purposes[purpose], field=fields[field], output_png=output_png,
                            output_html=output_html)
