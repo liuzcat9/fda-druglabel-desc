@@ -428,7 +428,7 @@ def calculate_super_adj_mat(cluster_ref, full_mat):
     print("Build super adjacency matrix:", str(time.time() - adj_t0))
 
     # add weights now
-    adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
+    adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 4
 
     return adj_mat
 
