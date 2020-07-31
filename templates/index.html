@@ -1,26 +1,36 @@
 {% extends "base.html" %}
 
 {% block content %}
-<form class="form-horizontal" action="/res" method="POST">
-    <div class="form-group">
-        <b>Purpose:</b>
-        <select class="select" name="purpose_res">
-            {% for purpose in purposes %}
-            <option>{{ purpose }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="my-5"></div>
-    <div class="form-group">
-        <b>Sort by field:</b>
-        <select class="select" name="field_res">
-            {% for field in fields %}
-            <option>{{ field }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="form-group">
-        <button type="submit" class="btn btn-secondary">Submit</button>
-    </div>
-</form>
+<section id="cover">
+        <div class="row text-white">
+            <div class="col-xl-12 mx-auto text-center p-4">
+                <form class="form-horizontal justify-content-center" action="/res" method="POST">
+                    <h1 class="py-2 text-truncate">FDA Drug Visualization</h1>
+                    <div class="form-group">
+                        <b>Purpose:</b>
+                        <select class="select" name="purpose_res">
+                            {% for purpose in purposes %}
+                            <option>{{ purpose }}</option>
+                            {% endfor %}
+                        </select>
+                        <b>Sort by field:</b>
+                        <select class="select" name="field_res">
+                            {% for field in fields %}
+                            <option>{{ field }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-secondary">Submit</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+</section>
+
+<div class="col-xl mx-auto text-center p-4">
+    <h4>Choose a purpose and a field for drug label comparison.</h4><br/>
+    Note: This is not the complete set of all FDA-approved drugs.
+</div>
+
 {% endblock %}

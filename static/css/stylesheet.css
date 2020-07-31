@@ -1,0 +1,6 @@
+#cover {
+    background: url('/static/background.png') center center no-repeat;
+    background-size: cover;
+    height: 100%;
+    position: relative;
+}
