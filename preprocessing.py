@@ -1,28 +1,30 @@
 import time
-from spacy.lang.en import English
+import os
 import pandas as pd
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 
-# custom files
-import parse_json
+import spacy
 
 # Takes in a list
-# Removes the word "Purpose" and punctuation
+# Removes the word "purpose" and "use" and punctuation
+# Lemmatizes tokens
 # Returns cleaned list
 def clean_list(purpose_str, nlp):
-    temp_doc = nlp(purpose_str)
+    temp_doc = nlp(purpose_str.lower()) # set lowercase to not confuse lemmatization
+    additional = ["purpose", "use"]
 
     # tokenize excluding punctuation
-    cleaned_list = [token.text.lower() for token in temp_doc
-                    if not(token.is_stop or token.is_punct or token.is_space or token.text.lower() == "purpose")]
+    cleaned_list = [token.lemma_ for token in temp_doc
+                    if not(token.is_stop or token.is_punct or token.is_space
+                           or token.lemma_ in additional)]
     return cleaned_list
 
 # Uses spacy to clean all words in all relevant columns
 def tokenize_columns(drug_df, columns_to_tokenize):
     tokenize_t0 = time.time()
-    nlp = English()
+    nlp = spacy.load("en_core_web_sm")
 
     for column in columns_to_tokenize:
         new_col = []
@@ -123,3 +125,20 @@ def cluster_purpose(drug_df):
     print(drug_df["purpose_cluster"])
 
     return drug_df
+
+# return a list of all purpose clusters
+def find_unique_purposes(drug_df):
+    return list(drug_df.purpose_cluster.unique())
+
+# function to write individual (smaller purpose chunks of dataframe to disk)
+def write_purpose_clusters_to_df(drug_df):
+    purposes = find_unique_purposes(drug_df)
+    for purpose in purposes:
+        purpose_key = "_".join(purpose.split())
+        if not os.path.isfile("pkl/purpose/" + purpose_key + ".pkl"):
+            purpose_df = drug_df.dropna(
+                subset=["id", "brand_name", "route", "product_type"])  # exclude all rows with columns of null
+
+            purpose_df = purpose_df.loc[purpose_df["purpose_cluster"].str.contains(purpose)]
+            print(purpose_df.head())
+            purpose_df.to_pickle("pkl/purpose/" + purpose_key + ".pkl")
