@@ -7,6 +7,7 @@ import gensim
 from gensim.test.utils import get_tmpfile
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.spatial.distance import pdist, squareform
+from sklearn.cluster import KMeans
 
 # custom files
 import preprocessing, parse_json, main
@@ -271,7 +272,7 @@ def test_model_by_topics(test_df, purpose, field):
     # load model
     model = load_doc2vec(field)
 
-    test_corpus = create_test_corpus(purpose_df)
+    test_corpus = create_test_corpus(purpose_df, field)
 
     # create all test vectors at once for comparison
     vectors_t0 = time.time()
@@ -289,22 +290,23 @@ def test_model_by_topics(test_df, purpose, field):
 
     adj_mat = main.calculate_super_adj_mat(cluster_ref, full_mat)
 
-    # add weights now
-    adj_mat[adj_mat != 0] = (adj_mat[adj_mat != 0] + .1) * 2
-
     # create mapping dictionaries for cluster-based graph
     num_to_cluster, attr_dict = main.generate_super_attr_mappings(purpose_df, cluster_ref, topics_dict)
 
+    # create full comprehensive html descriptions based on topics
+    num_to_html = main.generate_cluster_num_to_html(purpose_df, cluster_ref, field)
+
     # create sparse adjacency matrix by generating graph with top n edges per node weighted by similarity, removing edges
-    sparse_mat = main.restrict_adjacency_matrix(adj_mat, 8)
+    max_n = 8
+    sparse_mat = main.restrict_adjacency_matrix(adj_mat, max_n if adj_mat.shape[0] >= max_n else adj_mat.shape[0])
 
     print(adj_mat, adj_mat.shape)
     print(sparse_mat)
 
-    return (adj_mat, sparse_mat, attr_dict, num_to_cluster)
+    return (adj_mat, sparse_mat, attr_dict, num_to_cluster, num_to_html)
 
 # generate test_corpus TaggedDocuments
-def create_test_corpus(purpose_df):
+def create_test_corpus(purpose_df, field):
     corpus_t0 = time.time()
     # create list of tokens to compare (based on indices)
     test_list = list(map(str.split, purpose_df[field].tolist()))
@@ -320,11 +322,78 @@ def create_test_corpus(purpose_df):
 
     return test_corpus
 
+# train a model on purpose and cluster it based on doc2vectors
+def train_and_cluster_purpose(purpose_df):
+    # loaded dataframe has all purpose fields
+    if not os.path.isfile("purpose.model"):
+        train_corpus = process_training_data(purpose_df, "purpose")
+        train_and_save_model(train_corpus, "purpose")
+
+    # actual dataframe to sort by
+    trunc_df = purpose_df.copy()
+    trunc_df = trunc_df.dropna(
+        subset=["id", "brand_name", "route", "product_type"])  # exclude all rows with columns of null
+
+    model = load_doc2vec("purpose")
+    # perform testing using essentially the same purpose data but truncated to valid entries
+    test_corpus = create_test_corpus(trunc_df, "purpose")
+
+    # create all test vectors at once for comparison
+    vectors_t0 = time.time()
+    # use list of words in TaggedDocument and reshape as 1 feature to conform to sklearn
+    # n_samples x n_features
+    testX = np.array([model.infer_vector(para.words) for para in test_corpus])
+    print("Create test vectors:", str(time.time() - vectors_t0))
+    print(testX.shape)
+
+    # k-means cluster
+    km, labels = perform_k_means(testX)
+    print_docs_per_cluster(labels, test_corpus)
+
+    # label with clusters on dataframe, then save
+    trunc_df["purpose_cluster"] = labels
+    trunc_df.sort_values(by=['purpose_cluster'])
+    preprocessing.write_preprocessed_to_pkl(trunc_df, "doc2vec_purpose_drug_df")
+
+# perform k-means clustering on doc vectors
+def perform_k_means(vectorX):
+    km_t0 = time.time()
+    km = KMeans(n_clusters=50)
+    km.fit(vectorX)
+    print("Fit KMeans: ", str(time.time() - km_t0))
+
+    print("Num KMeans labels: ", str(len(km.labels_)))
+
+    return km, km.labels_
+
+# print all purposes per cluster
+def print_docs_per_cluster(labels, test_corpus):
+    dict_t0 = time.time()
+    # each index of docs corresponds to index of labels
+    docs = [para.words for para in test_corpus]
+
+    cluster_dict = {}
+
+    for i, label in enumerate(labels):
+        if label not in cluster_dict:
+            cluster_dict[label] = []
+        cluster_dict[label].append(docs[i])
+
+    print("Create cluster dictionary of docs:", str(time.time() - dict_t0))
+    f = open("cluster.txt", "w", encoding="utf-8")
+    for key, value in cluster_dict.items():
+        f.write('%s:%s\n' % (key, value))
+    f.close()
+
 if __name__ == "__main__":
-    field = "warnings"
+    field = "indications_and_usage"
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
                  "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
+
+    # cluster by purpose
+    # train_and_cluster_purpose(preprocessing.read_preprocessed_to_pkl("full_drug_df"))
+
     full_df = write_and_read_train_data(json_list, "full_train_df")
     train_df = write_and_read_tokenized_data(full_df, "tokenized_train_df")
     train_corpus = process_training_data(train_df, field)
@@ -333,11 +402,11 @@ if __name__ == "__main__":
 
     total_t0 = time.time()
     test_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
-    purpose = "sunscreen purposes uses protectant skin"
+    purpose = "sanitizer hand antiseptic antimicrobial skin"
 
     # adj_mat, sparse_mat, attr_dict, num_to_cluster = test_model(test_df, purpose, field)
-    adj_mat, sparse_mat, attr_dict, num_to_cluster = test_model_by_topics(test_df, purpose, field)
+    adj_mat, sparse_mat, attr_dict, num_to_cluster, num_to_html = test_model_by_topics(test_df, purpose, field)
     venn_G = main.generate_purpose_graph(sparse_mat, attr_dict, num_to_cluster)
-    main.generate_graph_plot(venn_G, purpose, field)
+    main.generate_graph_plot(venn_G, purpose, field, num_to_html, topics=True)
 
     print("Total test time:", str(time.time() - total_t0))

@@ -652,7 +652,7 @@ div.text = "<b>Products</b><br/>"
     # output_file("static/purpose-field/" + "_".join(purpose.split()) + "-" + field + ".html")
     # save(layout)
     # save file as json serial
-    # show(layout)
+    show(layout)
 
     return script, div
 
@@ -732,7 +732,7 @@ def create_web_graph(purpose, field):
     venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
     print("Time to build graph:", str(time.time() - full_graph_t0))
 
-    script, div = generate_graph_plot(venn_G, purpose, field, topics=True)
+    script, div = generate_graph_plot(venn_G, purpose, field, num_to_html, topics=True)
     print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
     return script, div
@@ -759,8 +759,8 @@ def main():
     purposes = preprocessing.find_unique_purposes(drug_df)
     fields = ["active_ingredient", "inactive_ingredient", "warnings", "dosage_and_administration", "indications_and_usage"]
 
-    # purposes = ["sanitizer hand antiseptic antimicrobial skin"]
-    # fields = ["indications_and_usage"]
+    purposes = ["sanitizer hand antiseptic antimicrobial skin"]
+    fields = ["indications_and_usage"]
 
     for purpose in purposes:
         for field in fields:
