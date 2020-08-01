@@ -590,13 +590,13 @@ def generate_purpose_graph(sparse_mat, attr_dict, num_to_name):
 def generate_graph_plot(venn_G, purpose, field, num_to_html, topics=False):
     # Display the network graph from the venn diagram interactions
     plot = figure(title="Network of Top Similar Drugs by " + " ".join([word.capitalize() for word in field.split("_")]),
-                  x_range=(-10, 10), y_range=(-10, 10),
+                  x_range=(-10, 10), y_range=(-10, 10), plot_width=600, plot_height=500,
                   tools="wheel_zoom, pan, lasso_select, box_select", active_scroll="wheel_zoom",
                   toolbar_location="left")
 
     # create general layout
     drug_panel = Div(width=400, height=plot.plot_height, height_policy="fixed")
-    layout = row(plot, drug_panel, height=600, height_policy="fixed")
+    layout = row(plot, drug_panel, height=500, height_policy="fixed")
 
     # generate extra field for topic keywords
     if topics:
@@ -617,7 +617,7 @@ var cluster_i = cb_data.source.selected.indices[0];
         names_str += names[cluster_i][name_i];
     }
 div.text = "<b>Products</b><br/>"
-+ "<div id='accordion' style='height: 600px; display: block; overflow: auto;'>"
++ "<div id='accordion' style='height: 500px; display: block; overflow: auto;'>"
 + names_str + "</div>";
     """ % (list(num_to_html.values())))
 
@@ -732,7 +732,7 @@ def create_web_graph(purpose, field):
     venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
     print("Time to build graph:", str(time.time() - full_graph_t0))
 
-    script, div = generate_graph_plot(venn_G, purpose, field, topics=True)
+    script, div = generate_graph_plot(venn_G, purpose, field, num_to_html, topics=True)
     print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
     return script, div
@@ -794,7 +794,7 @@ def main():
 
             # 6: Plot word cloud
             # save word cloud for purpose cluster - field combo
-            save_wordcloud(purpose_df, purpose, field)
+            # save_wordcloud(purpose_df, purpose, field)
 
     # 4: plot heatmap using adjacency matrix for all matches
     # TODO: fix name reference

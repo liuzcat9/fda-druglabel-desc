@@ -3,19 +3,23 @@
 {% block content %}
 <div class="col-lg-12">
     <div class="row">
-        <div class="embed-responsive embed-responsive-21by9" style="width: 100%;">
-            <img class="loading-image" src="{{ url_for('static', filename='loading.gif') }}"/>
+        <div class="col-sm-5 my-auto">
+            <div class="card">
+  <div class="card-body">
+    <b>Purpose:</b> {{ purpose }} <br/>
+            <b>Purpose Keywords:</b> {{ purpose_key }} <br/>
+            <b>Field:</b> {{ field }} <br/>
+  </div>
+</div>
+        </div>
+        <div class="col-xs-3">
+            <img src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_png }}"/>
+        </div>
+        <div class="col-md-9">
+            <div class="embed-responsive embed-responsive-16by9">
             <iframe class="embed-responsive-item"
                     src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_html }}"></iframe>
         </div>
-    </div>
-    <div class="row">
-        <div class="col-sm-5 my-auto">
-            <p><b>Purpose Keywords:</b> {{ purpose }}</p>
-            <p><b>Field:</b> {{ field }}</p>
-        </div>
-        <div class="col">
-            <img src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_png }}"/>
         </div>
     </div>
 </div>

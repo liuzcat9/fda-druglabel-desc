@@ -84,8 +84,8 @@ def load_result(purpose, field):
     output_html = "_".join(purposes[purpose].split()) + "-" + "_".join(fields[field].split()) + ".html"
     output_png = "_".join(purposes[purpose].split()) + "-" + "_".join(fields[field].split()) + ".png"
 
-    return render_template('result.html', purpose=purposes[purpose], field=fields[field], output_png=output_png,
-                           output_html=output_html)
+    return render_template('result.html', purpose=purpose, purpose_key=purposes[purpose], field=field,
+                           output_png=output_png, output_html=output_html)
 
 if __name__ == '__main__':
     app.run(port=33507, debug=True)
