@@ -24,7 +24,7 @@ def clean_list(purpose_str, nlp):
 # Uses spacy to clean all words in all relevant columns
 def tokenize_columns(drug_df, columns_to_tokenize):
     tokenize_t0 = time.time()
-    nlp = spacy.load("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm", disable=['parser','ner','textcat'])
 
     for column in columns_to_tokenize:
         new_col = []
