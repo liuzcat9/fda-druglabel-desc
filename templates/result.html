@@ -3,36 +3,59 @@
 {% block content %}
 <div class="col-lg-12">
     <div class="row">
-        <div class="col-sm-5 my-auto">
+        <div class="col-sm-5 d-flex align-items-stretch">
             <div class="card">
-  <div class="card-body">
-    <b>Purpose:</b> {{ purpose }} <br/>
-            <b>Purpose Keywords:</b> {{ purpose_key }} <br/>
-            <b>Field:</b> {{ field }} <br/>
-  </div>
-</div>
+                <div class="card-body">
+                    <b>Purpose:</b> {{ purpose }} <br/>
+                    <b>Purpose Keywords:</b> {{ purpose_key }} <br/>
+                    <b>Field:</b> {{ field }} <br/>
+                    <br/>
+                    Hover and click on the network to view specific drug label information.
+                    Click on the word cloud for an enlarged version.
+                </div>
+            </div>
         </div>
         <div class="col-xs-3">
-            <img src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_png }}"/>
+            <img id="modalImg" src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_png }}"/>
+            <div id="myModal" class="modal">
+                <span class="close">&times;</span>
+                <img class="modal-content" id="img1">
+            </div>
         </div>
         <div class="col-md-9">
             <div class="embed-responsive embed-responsive-16by9">
-            <iframe class="embed-responsive-item"
-                    src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_html }}"></iframe>
-        </div>
+<!--                <iframe class="embed-responsive-item"-->
+<!--                        src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_html }}"></iframe>-->
+                <iframe class="embed-responsive-item"
+                        src="{{ url_for('static', filename='purpose-field/sun_screen_skin_measure_protection-warnings.html') }}"></iframe>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
-    $(document).ready(function () {
+$(document).ready(function () {
     $(".embed-responsive-item").on("load", function () {
         $(".loading-image").hide();
 });
 });
 
+var modal = document.getElementById("myModal");
 
+var img = document.getElementById("modalImg");
+var myImg = document.getElementById("img1");
+img.onclick = function(){
+  modal.style.display = "block";
+  myImg.src = this.src;
+}
 
+// Get the <span> element that closes the modal
+var span = document.getElementsByClassName("close")[0];
+
+// When the user clicks on <span> (x), close the modal
+span.onclick = function() {
+  modal.style.display = "none";
+}
 
 
 </script>
