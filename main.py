@@ -601,7 +601,7 @@ def generate_graph_plot(venn_G, purpose, field, num_to_html, topics=False):
     # generate extra field for topic keywords
     if topics:
         node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("number of drugs", "@num_drugs"),
-                                            ("name", "@name"), ("route", "@route"),
+                                            ("names", "@name"), ("routes", "@route"),
                                               ("keywords", "@keywords")], show_arrow=False)
     # generate hover capabilities
     else:
@@ -638,9 +638,9 @@ div.text = "<b>Products</b><br/>"
 
     # graph settings
     # change size of node with cluster
-    graph.node_renderer.glyph = Circle(size="size_drugs", fill_color="pink")
-    graph.node_renderer.selection_glyph = Circle(size=15, fill_color="green")
-    graph.edge_renderer.selection_glyph = MultiLine(line_color="#226882")
+    graph.node_renderer.glyph = Circle(size="size_drugs", fill_color="pink", line_width=1.5)
+    graph.node_renderer.selection_glyph = Circle(size="size_drugs", fill_color="green", line_width=1.5)
+    graph.edge_renderer.selection_glyph = MultiLine(line_color="#226882", line_width={'field': 'weight'})
     graph.edge_renderer.hover_glyph = MultiLine(line_color="red", line_width={'field': 'weight'})
     graph.selection_policy = NodesAndLinkedEdges()
     graph.inspection_policy = NodesAndLinkedEdges()
@@ -713,7 +713,7 @@ def save_wordcloud(purpose_df, purpose, field):
     print(test_str)
 
     word_t0 = time.time()
-    wordcloud = WordCloud(background_color="white", max_words=5000, contour_color='steelblue')
+    wordcloud = WordCloud(background_color="white", max_words=5000, contour_color='steelblue', colormap="GnBu")
     wordcloud.generate(test_str)
     wordcloud.to_file("static/" + "_".join(purpose.split()) + "-" + field + ".png")
 
@@ -794,7 +794,7 @@ def main():
 
             # 6: Plot word cloud
             # save word cloud for purpose cluster - field combo
-            # save_wordcloud(purpose_df, purpose, field)
+            save_wordcloud(purpose_df, purpose, field)
 
     # 4: plot heatmap using adjacency matrix for all matches
     # TODO: fix name reference
