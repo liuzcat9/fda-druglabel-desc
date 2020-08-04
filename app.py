@@ -7,7 +7,7 @@ import pandas as pd
 
 app = Flask(__name__)
 
-purposes = {"Anti-plaque Toothpaste": 'antiplaque antigingivitis antibacterial 092 060',
+purposes = {"Anti-plaque Mouthwash": 'antiplaque antigingivitis antibacterial 092 060',
             "Acid Reducer": 'acid reducer antacid otc purpose',
             "Acne and Pores": 'acne treatment medication gel pimple',
             "Antiseptics": 'aid antiseptic alertness debride agent',

@@ -3,6 +3,7 @@
     background-size: cover;
     height: 100%;
     position: relative;
+    z-index: 0;
 }
 
 #modalImg {
