@@ -42,7 +42,8 @@ def parse_zip(file_list):
                                        o["active_ingredient"][0] if "active_ingredient" in o.keys() else None,
                                        o["inactive_ingredient"][0] if "inactive_ingredient" in o.keys() else None,
                                        o["warnings"][0] if "warnings" in o.keys() else None,
-                                       o["openfda"]["brand_name"][0] if ("brand_name" in o["openfda"].keys()) else None,
+                                        # grammatically correct brand name
+                                       o["openfda"]["brand_name"][0].strip().title() if ("brand_name" in o["openfda"].keys()) else None,
                                        o["openfda"]["product_type"][0] if "product_type" in o[
                                            "openfda"].keys() else None,
                                        o["openfda"]["route"][0] if "route" in o["openfda"].keys() else None,

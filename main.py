@@ -138,7 +138,6 @@ def find_similar_products_from_product_purpose(drug_df, original_purpose_list, o
 # helper function to count and record matching words/total words in indications and usage field
 # returns: dictionary of product names and counts of matches
 def find_matching_field_for_product(drug_df, similar_products, original, field):
-    nlp = spacy.load("en_core_web_sm")
     valid_df = drug_df.dropna(subset=["id", "purpose", "brand_name", field])  # exclude all rows with relevant columns of null
     valid_df = valid_df.loc[valid_df["id"] != original]  # exclude self
 
@@ -447,19 +446,19 @@ def weight_and_process_adj_mat(adj_mat):
 def generate_super_attr_mappings(purpose_df, cluster_ref, *topics_dict):
     attr_t0 = time.time()
     # generate helper dictionary for list of ids per cluster: ordered
-    num_to_name = generate_cluster_num_to_field(purpose_df, cluster_ref)
+    num_to_id = generate_cluster_num_to_field(purpose_df, cluster_ref)
     attr_dict = {}  # attributes of nodes to be added
 
     cutoff = 10
     # iterate through products and generate attributes/mappings
-    for i, cluster in enumerate(num_to_name):
-        names = purpose_df.loc[purpose_df["id"].isin(num_to_name[cluster]), "brand_name"].tolist()
+    for i, cluster in enumerate(num_to_id):
+        names = purpose_df.loc[purpose_df["id"].isin(num_to_id[cluster]), "brand_name"].tolist()
         num_per_cluster = len(names)
 
         # shorten names if in a cluster
         # truncate or leave as is
         names = names[0:cutoff]
-        routes = purpose_df.loc[purpose_df["id"].isin(num_to_name[cluster]), "route"].tolist()[0:cutoff]
+        routes = purpose_df.loc[purpose_df["id"].isin(num_to_id[cluster]), "route"].tolist()[0:cutoff]
         if num_per_cluster > cutoff:
             # add ellipses for more
             names.append("...")
@@ -743,7 +742,7 @@ def main():
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
                  "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
-    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
+    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_alpha_full_drug_df")
 
     print(drug_df[0:10]) # verify read
 
@@ -759,8 +758,10 @@ def main():
     purposes = preprocessing.find_unique_purposes(drug_df)
     fields = ["active_ingredient", "inactive_ingredient", "warnings", "dosage_and_administration", "indications_and_usage"]
 
-    # purposes = ["sanitizer hand antiseptic antimicrobial skin"]
-    # fields = ["indications_and_usage"]
+    print(purposes)
+
+    purposes = ["sanitizer hand antiseptic antimicrobial skin"]
+    fields = ["indications_and_usage"]
 
     for purpose in purposes:
         for field in fields:

@@ -13,7 +13,8 @@ import spacy
 # Returns cleaned list
 def clean_list(purpose_str, nlp):
     temp_doc = nlp(purpose_str.lower()) # set lowercase to not confuse lemmatization
-    additional = ["purpose", "use"]
+    # blacklist all field names
+    additional = ["purpose", "use", "active", "inactive", "ingredient", "warning"]
 
     # tokenize excluding punctuation
     cleaned_list = [token.lemma_ for token in temp_doc
@@ -71,6 +72,10 @@ def preprocess_and_write_df(raw_drug_df, filename):
 
     # perform purpose clustering using cleaned lists
     drug_df = cluster_purpose(drug_df)
+
+    # alphabetize brand names for future display
+    drug_df = drug_df.sort_values(by=["brand_name"])
+
     write_preprocessed_to_pkl(drug_df, filename)
 
 ## sklearn
