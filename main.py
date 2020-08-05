@@ -742,7 +742,7 @@ def main():
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
                  "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
-    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_alpha_full_drug_df")
+    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_trunc_alpha_full_drug_df")
 
     print(drug_df[0:10]) # verify read
 
