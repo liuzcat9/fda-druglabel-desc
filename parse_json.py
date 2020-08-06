@@ -17,11 +17,11 @@ def read_zip(path):
 def parse_zip(file_list):
     parse_t0 = time.time()
 
-    df_cols = ["purpose", "id", "package_label_principal_display_panel",
+    df_cols = ["purpose", "indications_and_usage", "id", "package_label_principal_display_panel",
                "active_ingredient", "inactive_ingredient", "warnings",
                "brand_name", "product_type", "route",
                "mechanism_of_action", "clinical_pharmacology",
-               "dosage_and_administration", "indications_and_usage", "contraindications"]
+               "dosage_and_administration", "contraindications"]
     drug_df = pd.DataFrame(columns=df_cols)
 
     # extract wanted information from json files
@@ -35,8 +35,9 @@ def parse_zip(file_list):
             # read wanted information into dataframe
             # openfda is in every entry of subset of data
             for o in objects:
-                if "purpose" in o.keys() and o["purpose"][0] != "": # all represented data should have a purpose field
-                    nested_current.append([o["purpose"][0],
+                if ("purpose" in o.keys() and o["purpose"][0] != "") or "indications_and_usage" in o.keys(): # all represented data should have a purpose/indications field
+                    nested_current.append([o["purpose"][0] if "purpose" in o.keys() else None,
+                                           o["indications_and_usage"][0] if "indications_and_usage" in o.keys() else None,
                                        o["id"] if "id" in o.keys() else None,
                                        o["package_label_principal_display_panel"][0] if "package_label_principal_display_panel" in o.keys() else None,
                                        o["active_ingredient"][0] if "active_ingredient" in o.keys() else None,
@@ -50,7 +51,6 @@ def parse_zip(file_list):
                                         o["mechanism_of_action"][0] if "mechanism_of_action" in o.keys() else None,
                                            o["clinical_pharmacology"][0] if "clinical_pharmacology" in o.keys() else None,
                                        o["dosage_and_administration"][0] if "dosage_and_administration" in o.keys() else None,
-                                       o["indications_and_usage"][0] if "indications_and_usage" in o.keys() else None,
                                        o["contraindications"][0] if "contraindications" in o.keys() else None])
 
                 current.append(o)

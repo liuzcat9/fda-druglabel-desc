@@ -32,7 +32,8 @@ import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity, cosine_distances, linear_kernel
 from sklearn.decomposition import TruncatedSVD, LatentDirichletAllocation
-from sklearn.cluster import DBSCAN, SpectralClustering, Birch
+from sklearn.cluster import DBSCAN, SpectralClustering, Birch, KMeans
+from sklearn.metrics import silhouette_score
 from sklearn.model_selection import GridSearchCV
 
 # custom files
@@ -370,6 +371,63 @@ def run_density_cluster(X):
 
     return density_cluster
 
+
+# perform TruncatedSVD (LSA for TD-IDF) to see if dimensionality can be sufficiently reduced
+def perform_LSA(drug_df, field="purpose"):
+    # TF-IDF
+    purposeX = create_tfidf(drug_df[field].tolist())
+
+    # LSA
+    lsa = TruncatedSVD(n_components=100)
+    lsa.fit(purposeX)
+    print(sum(lsa.explained_variance_ratio_))
+
+    return lsa.fit_transform(purposeX)
+
+# perform silhouette/inertia scoring for TF-IDF > KMeans clustering
+def perform_kmeans_scoring(drug_df):
+    # TF-IDF
+    tfidfv_t0 = time.time()
+    purpose_list = drug_df["combined_purpose"].tolist()
+    tfidfv = TfidfVectorizer()
+    X = tfidfv.fit_transform(purpose_list)
+    print("TF-IDF: ", str(time.time() - tfidfv_t0))
+
+    # Perform inertia/silhouette scoring for new data frame of 81,501
+    # collect average scores
+    avg_silhouettes = {}
+    avg_inertias = {}
+    # KMeans
+    n_clusters_range = [10, 50]
+    # find ideal number of clusters
+    for n_clusters in n_clusters_range:
+        n_trials = 5
+        sum_sil = 0
+        sum_inert = 0
+        # conduct multiple trials per n_clusters
+        for trial in range(n_trials):
+            km = KMeans(n_clusters=n_clusters)
+            km.fit(X)
+
+            # Calculate the mean silhouette coefficient for the number of clusters chosen
+            sum_sil += silhouette_score(X, km.predict(X), metric='euclidean')
+            sum_inert += km.inertia_
+
+        avg_silhouettes[n_clusters] = sum_sil / n_trials
+        avg_inertias[n_clusters] = sum_inert / n_trials
+        print("Calculated for", str(n_clusters), "clusters:", avg_silhouettes[n_clusters])
+
+    fig, ax = plt.subplots(1, 2)
+    ax[0].plot(*zip(*list(avg_inertias.items())))
+    ax[1].plot(*zip(*list(avg_silhouettes.items())))
+
+    ax[0].title.set_text("Inertias")
+    ax[0].set(xlabel="Clusters", ylabel="Inertia")
+    ax[1].title.set_text("Silhouettes")
+    ax[1].set(xlabel="Clusters", ylabel="Silhouette Score")
+
+    plt.show()
+
 # rewrite the keys because they are not numbered completely consecutively, not assigned
 def reset_cluster_index(cluster_ref, topics_dict):
     new_cluster_ref = {}
@@ -459,14 +517,16 @@ def generate_super_attr_mappings(purpose_df, cluster_ref, *topics_dict):
         # truncate or leave as is
         names = names[0:cutoff]
         routes = purpose_df.loc[purpose_df["id"].isin(num_to_id[cluster]), "route"].tolist()[0:cutoff]
+        types = purpose_df.loc[purpose_df["id"].isin(num_to_id[cluster]), "product_type"].tolist()[0:cutoff]
         if num_per_cluster > cutoff:
             # add ellipses for more
             names.append("...")
             routes.append("...")
+            types.append("...")
 
         attr_dict[cluster] = {"id": "Topic " + str(i) if num_per_cluster > 1 else "Individual Drug",
                               "num_drugs": num_per_cluster, "size_drugs": math.log(num_per_cluster) * 2 + 3,
-                              "name": ", ".join(names), "route": ", ".join(routes)}
+                              "name": ", ".join(names), "route": ", ".join(routes), "product_type": ", ".join(types)}
 
         # if sorting by topics cluster, use dictionary in args tuple
         if topics_dict:
@@ -500,11 +560,12 @@ def generate_cluster_num_to_field(purpose_df, cluster_ref, field="id"):
 def generate_cluster_num_to_html(purpose_df, cluster_ref, field):
     html_t0 = time.time()
     # pull original drug database columns for full text; at this point file should be read
-    raw_df = preprocessing.read_preprocessed_to_pkl("full_drug_df")
+    raw_df = preprocessing.read_preprocessed_to_pkl("indic_full_drug_df")
 
     # join relevant raw field to cleaned dataframe
     full_df = pd.merge(purpose_df, raw_df[["id", field]].add_suffix("_raw"), left_on='id', right_on='id_raw',
                        how="left")
+
     print("New dataframe joined:", str(full_df.shape))
 
     num_to_html = {}
@@ -518,6 +579,7 @@ def generate_cluster_num_to_html(purpose_df, cluster_ref, field):
             card_id = "heading_" + row["id"]
             blurb = ("<b>Brand name: </b>" + row["brand_name"] + "<br/>"
             + "<b>Route: </b>" + row["route"] + "<br/>"
+            + "<b>Drug Type: </b>" + row["product_type"] + "<br/>"
             + "<b>" + " ".join([word.capitalize() for word in field.split("_")]) + ": </b>"
             + row[field + "_raw"])
             html_str = """
@@ -600,7 +662,7 @@ def generate_graph_plot(venn_G, purpose, field, num_to_html, topics=False):
     # generate extra field for topic keywords
     if topics:
         node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("number of drugs", "@num_drugs"),
-                                            ("names", "@name"), ("routes", "@route"),
+                                            ("names", "@name"), ("routes", "@route"), ("types", "@product_type"),
                                               ("keywords", "@keywords")], show_arrow=False)
     # generate hover capabilities
     else:
@@ -694,18 +756,6 @@ def plot_adj_mat_heatmap(adj_mat, attr_dict, product_list):
     fig.tight_layout()
     plt.show()
 
-# perform TruncatedSVD (LSA for TD-IDF) to see if dimensionality can be sufficiently reduced
-def perform_LSA(drug_df, field="purpose"):
-    # TF-IDF
-    purposeX = create_tfidf(drug_df[field].tolist())
-
-    # LSA
-    lsa = TruncatedSVD(n_components=100)
-    lsa.fit(purposeX)
-    print(sum(lsa.explained_variance_ratio_))
-
-    return lsa.fit_transform(purposeX)
-
 # save wordcloud of full purpose-field grouping
 def save_wordcloud(purpose_df, purpose, field):
     test_str = " ".join(purpose_df[field].tolist())
@@ -742,9 +792,10 @@ def main():
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
                  "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
-    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_trunc_alpha_full_drug_df")
+    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_indic_full_drug_df")
 
     print(drug_df[0:10]) # verify read
+    print(drug_df.shape)
 
     # # 1: generate key purposes
     # rank_purpose(drug_df, 30)
@@ -754,17 +805,21 @@ def main():
     # # 2.
     # draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
 
+    # 7. Perform KMeans scoring on purpose/indication combination clustering sort
+    # perform_kmeans_scoring(drug_df)
+
     # 3b. Automate process to obtain node network graphs of purpose_field combinations
     purposes = preprocessing.find_unique_purposes(drug_df)
-    fields = ["active_ingredient", "inactive_ingredient", "warnings", "dosage_and_administration", "indications_and_usage"]
+    fields = ["active_ingredient", "inactive_ingredient", "warnings", "dosage_and_administration"]
 
     print(purposes)
 
-    purposes = ["sanitizer hand antiseptic antimicrobial skin"]
-    fields = ["indications_and_usage"]
+    # purposes = ["indicate usage patient symptom tablet"]
+    # fields = ["warnings"]
 
-    for purpose in purposes:
+    for purpose in purposes[29:]:
         for field in fields:
+            print("Parsing", purpose, "with", field)
             purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
 
             # # 2b: Use purpose to find top products to compare
@@ -780,22 +835,24 @@ def main():
             # generate_graph_plot(venn_G, purpose, field)
             # print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
-            full_graph_t0 = time.time()
-            # 3. Generate a graph node network of top products and their similarity to each other
-            adj_mat, sparse_mat, attr_dict, num_to_name, num_to_html = \
-                generate_similarity_matching_field_of_purpose(purpose_df, field)
+            # certain fields for certain clusters are None, completely
+            if len(purpose_df.index) > 0:
+                full_graph_t0 = time.time()
+                # 3. Generate a graph node network of top products and their similarity to each other
+                adj_mat, sparse_mat, attr_dict, num_to_name, num_to_html = \
+                    generate_similarity_matching_field_of_purpose(purpose_df, field)
 
-            # create graph
-            venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
-            print("Time to build graph:", str(time.time() - full_graph_t0))
+                # create graph
+                venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
+                print("Time to build graph:", str(time.time() - full_graph_t0))
 
-            bokeh_script, bokeh_div = generate_graph_plot(venn_G, purpose, field, num_to_html, topics=True)
-            save_html_template(bokeh_script, bokeh_div, purpose, field)
-            print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
+                bokeh_script, bokeh_div = generate_graph_plot(venn_G, purpose, field, num_to_html, topics=True)
+                save_html_template(bokeh_script, bokeh_div, purpose, field)
+                print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
-            # 6: Plot word cloud
-            # save word cloud for purpose cluster - field combo
-            save_wordcloud(purpose_df, purpose, field)
+                # 6: Plot word cloud
+                # save word cloud for purpose cluster - field combo
+                save_wordcloud(purpose_df, purpose, field)
 
     # 4: plot heatmap using adjacency matrix for all matches
     # TODO: fix name reference

@@ -14,7 +14,7 @@ import spacy
 def clean_list(purpose_str, nlp):
     temp_doc = nlp(purpose_str.lower()) # set lowercase to not confuse lemmatization
     # blacklist all field names
-    additional = ["purpose", "use", "active", "inactive", "ingredient", "warning"]
+    additional = ["purpose", "use", "active", "inactive", "ingredient", "warning", "treatment", "indication"]
 
     # tokenize excluding punctuation
     cleaned_list = [token.lemma_ for token in temp_doc
@@ -77,6 +77,8 @@ def preprocess_and_write_df(raw_drug_df, filename):
     print(drug_df["indications_and_usage"])
 
     # perform purpose clustering using cleaned lists
+    # use two fields for purpose: purpose & indications and usage
+    drug_df["combined_purpose"] = drug_df["purpose"].fillna("") + " " + drug_df["indications_and_usage"].fillna("")
     drug_df = cluster_purpose(drug_df)
 
     # alphabetize brand names for future display
@@ -116,7 +118,7 @@ def cluster_purpose(drug_df):
     # 5. See what TF-IDF can do with respect to clustering purposes
     # TF-IDF
     tfidfv_t0 = time.time()
-    purpose_list = drug_df["purpose"].tolist()
+    purpose_list = drug_df["combined_purpose"].tolist()
     tfidfv = TfidfVectorizer()
     X = tfidfv.fit_transform(purpose_list)
     print("TF-IDF: ", str(time.time() - tfidfv_t0))
