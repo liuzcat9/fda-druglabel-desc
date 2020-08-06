@@ -67,7 +67,7 @@ def write_train_data(file_list, filename):
             # read wanted information into dataframe
             # openfda is in every entry of subset of data
             for o in objects:
-                if "purpose" not in o.keys() or o["purpose"][0] == "": # pull specifically data NOT used for display
+                if "purpose" not in o.keys() or o["purpose"][0] == "" and "indications_and_usage" not in o.keys(): # pull specifically data NOT used for clustering
                     nested_current.append([o["id"] if "id" in o.keys() else None,
                                        o["package_label_principal_display_panel"][0]
                                        if "package_label_principal_display_panel" in o.keys() else None,
@@ -386,7 +386,7 @@ def print_docs_per_cluster(labels, test_corpus):
     f.close()
 
 if __name__ == "__main__":
-    field = "indications_and_usage"
+    field = "warnings"
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
                  "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
@@ -394,19 +394,21 @@ if __name__ == "__main__":
     # cluster by purpose
     # train_and_cluster_purpose(preprocessing.read_preprocessed_to_pkl("full_drug_df"))
 
-    full_df = write_and_read_train_data(json_list, "full_train_df")
-    train_df = write_and_read_tokenized_data(full_df, "tokenized_train_df")
-    train_corpus = process_training_data(train_df, field)
-    train_and_save_model(train_corpus, field)
+    # full_df = write_and_read_train_data(json_list, "full_train_df")
+    # train_df = write_and_read_tokenized_data(full_df, "tokenized_train_df")
+    # train_corpus = process_training_data(train_df, field)
+    # train_and_save_model(train_corpus, field)
     # check_model(train_corpus, field)
 
     total_t0 = time.time()
-    test_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
-    purpose = "sanitizer hand antiseptic antimicrobial skin"
+    test_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_indic_full_drug_df")
+    purpose = "indicate usage patient symptom tablet"
 
     # adj_mat, sparse_mat, attr_dict, num_to_cluster = test_model(test_df, purpose, field)
     adj_mat, sparse_mat, attr_dict, num_to_cluster, num_to_html = test_model_by_topics(test_df, purpose, field)
     venn_G = main.generate_purpose_graph(sparse_mat, attr_dict, num_to_cluster)
-    main.generate_graph_plot(venn_G, purpose, field, num_to_html, topics=True)
+    bokeh_script, bokeh_div = main.generate_graph_plot(venn_G, purpose, field, num_to_html, topics=True)
+
+    main.save_html_template(bokeh_script, bokeh_div, purpose, field)
 
     print("Total test time:", str(time.time() - total_t0))
