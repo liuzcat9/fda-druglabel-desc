@@ -324,19 +324,21 @@ def create_test_corpus(purpose_df, field):
 
 # train a model on purpose and cluster it based on doc2vectors
 def train_and_cluster_purpose(purpose_df):
+    print("Dataframe rows:", str(len(purpose_df.index)))
     # loaded dataframe has all purpose fields
-    if not os.path.isfile("purpose.model"):
-        train_corpus = process_training_data(purpose_df, "purpose")
-        train_and_save_model(train_corpus, "purpose")
+    if not os.path.isfile("combined_purpose.model"):
+        train_corpus = process_training_data(purpose_df, "combined_purpose")
+        train_and_save_model(train_corpus, "combined_purpose")
 
     # actual dataframe to sort by
     trunc_df = purpose_df.copy()
-    trunc_df = trunc_df.dropna(
-        subset=["id", "brand_name", "route", "product_type"])  # exclude all rows with columns of null
+    # dataframe purpose_indic already excludes NA columns
+    # trunc_df = trunc_df.dropna(
+    #     subset=["id", "brand_name", "route", "product_type"])  # exclude all rows with columns of null
 
-    model = load_doc2vec("purpose")
+    model = load_doc2vec("combined_purpose")
     # perform testing using essentially the same purpose data but truncated to valid entries
-    test_corpus = create_test_corpus(trunc_df, "purpose")
+    test_corpus = create_test_corpus(trunc_df, "combined_purpose")
 
     # create all test vectors at once for comparison
     vectors_t0 = time.time()
@@ -353,7 +355,7 @@ def train_and_cluster_purpose(purpose_df):
     # label with clusters on dataframe, then save
     trunc_df["purpose_cluster"] = labels
     trunc_df.sort_values(by=['purpose_cluster'])
-    preprocessing.write_preprocessed_to_pkl(trunc_df, "doc2vec_purpose_drug_df")
+    preprocessing.write_preprocessed_to_pkl(trunc_df, "doc2vec_combined_purpose_drug_df")
 
 # perform k-means clustering on doc vectors
 def perform_k_means(vectorX):
@@ -392,23 +394,23 @@ if __name__ == "__main__":
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
 
     # cluster by purpose
-    # train_and_cluster_purpose(preprocessing.read_preprocessed_to_pkl("full_drug_df"))
+    train_and_cluster_purpose(preprocessing.read_preprocessed_to_pkl("purpose_indic_full_drug_df"))
 
     # full_df = write_and_read_train_data(json_list, "full_train_df")
     # train_df = write_and_read_tokenized_data(full_df, "tokenized_train_df")
     # train_corpus = process_training_data(train_df, field)
     # train_and_save_model(train_corpus, field)
-    # check_model(train_corpus, field)
-
-    total_t0 = time.time()
-    test_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_indic_full_drug_df")
-    purpose = "indicate usage patient symptom tablet"
-
-    # adj_mat, sparse_mat, attr_dict, num_to_cluster = test_model(test_df, purpose, field)
-    adj_mat, sparse_mat, attr_dict, num_to_cluster, num_to_html = test_model_by_topics(test_df, purpose, field)
-    venn_G = main.generate_purpose_graph(sparse_mat, attr_dict, num_to_cluster)
-    bokeh_script, bokeh_div = main.generate_graph_plot(venn_G, purpose, field, num_to_html, topics=True)
-
-    main.save_html_template(bokeh_script, bokeh_div, purpose, field)
-
-    print("Total test time:", str(time.time() - total_t0))
+    # # check_model(train_corpus, field)
+    #
+    # total_t0 = time.time()
+    # test_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_indic_full_drug_df")
+    # purpose = "indicate usage patient symptom tablet"
+    #
+    # # adj_mat, sparse_mat, attr_dict, num_to_cluster = test_model(test_df, purpose, field)
+    # adj_mat, sparse_mat, attr_dict, num_to_cluster, num_to_html = test_model_by_topics(test_df, purpose, field)
+    # venn_G = main.generate_purpose_graph(sparse_mat, attr_dict, num_to_cluster)
+    # bokeh_script, bokeh_div = main.generate_graph_plot(venn_G, purpose, field, num_to_html, topics=True)
+    #
+    # main.save_html_template(bokeh_script, bokeh_div, purpose, field)
+    #
+    # print("Total test time:", str(time.time() - total_t0))
