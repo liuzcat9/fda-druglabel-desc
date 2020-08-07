@@ -17,7 +17,8 @@
             </div>
         </div>
         <div class="col-xs-3">
-            <img id="modalImg" src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_png }}"/>
+<!--            <img id="modalImg" src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_png }}"/>-->
+            <img id="modalImg" src="{{ url_for('static', filename='') }}{{ output_png }}"/>
             <div id="myModal" class="modal">
                 <span class="close">&times;</span>
                 <img class="modal-content" id="img1">
@@ -25,10 +26,10 @@
         </div>
         <div class="col-md-9">
             <div class="embed-responsive embed-responsive-16by9">
-                <iframe class="embed-responsive-item"
-                        src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_html }}"></iframe>
 <!--                <iframe class="embed-responsive-item"-->
-<!--                        src="{{ url_for('static', filename='purpose-field/sun_screen_skin_measure_protection-warnings.html') }}"></iframe>-->
+<!--                        src="https://fda-druglabel-vis.s3.us-east-2.amazonaws.com/{{ output_html }}"></iframe>-->
+                <iframe class="embed-responsive-item"
+                        src="{{ url_for('static', filename='purpose-field/')}}{{ output_html }}"></iframe>
             </div>
         </div>
     </div>

@@ -35,7 +35,7 @@ This resulted in ~159,800 drug labels with complete fields for <b>purpose</b> or
 
 The display of drug types for this raw dataset is as follows.
 
-<img src="{{ url_for('static', filename='about/OTC_Presc_full.png') }}">
+<img src="{{ url_for('static', filename='about/OTC_Presc_purpose_indic.png') }}">
 
 <p>From this dataframe, drug labels without adequate descriptive fields for the user:
     <b>brand_name, route, product_type (OTC/Prescription)</b> were dropped from the dataframe.</p>
@@ -61,7 +61,8 @@ to centroids and repeatedly updates the means based on least squared Euclidean d
 A rather arbitrary 50 clusters (silhouette score ~ .5) was chosen after intended optimization maximizing silhouette scores and reducing inertia revealed that
     the clusters were not decreasing in effectiveness past 1000 clusters, which would be unmanageable both for users and project scope.
 Top importance keywords were retrieved from the TF-IDF features corresponding to each of these 50 clusters,
-as the summary of purpose per cluster.</p> <br/>
+as the summary of purpose per cluster. Though clustering results were not perfect, some categories were particularly effective
+and specific. Further refinement on clustering method as well as lack of or increased text preprocessing may improve results.</p> <br/>
 
 <img src="{{ url_for('static', filename='about/silhouette.png') }}">
 
@@ -69,13 +70,13 @@ as the summary of purpose per cluster.</p> <br/>
 
 <img src="{{ url_for('static', filename='about/per_cluster_all.png') }}">
 
-<img src="{{ url_for('static', filename='about/per_cluster_valid.png') }}">
-
 <h2>Visualizations</h2>
 <p>For every combination of combined purpose (<b>purpose</b> and <b>indications and usage</b>) with the relevant fields
-(<b>active ingredient, inactive ingredient, dosage and administration, warnings</b>, the following visualizations were generated.
-As not every drug label contained every field, drug labels without the particular field for which visualizations were generated
-    were temporarily dropped. Thus it was not possible that every drug label in a purpose cluster was in every visualization for all fields.</p>
+    (<b>active ingredient, inactive ingredient, dosage and administration, warnings</b>, the following visualizations were generated.</p>
+<p>As not every drug label contained every field, drug labels without the particular field for which visualizations were generated
+    were temporarily dropped. Thus it was not possible that every drug label in a purpose cluster was in every visualization for all fields. <br/>
+Another case was that no drug labels existed for certain comparisons of fields (none of these--often prescription--drug labels
+contained a valid entry for the field), and these therefore had no visualizations generated for this combination.</p>
 
 <h3>Word Cloud Visualization</h3>
 <p>The first visualization provided to the user upon their selection of a pre-sorted purpose and a field with which to arrange the drugs by content, is a word cloud.
@@ -120,20 +121,20 @@ models: distributed memory (paragraph vectors represent semantics along with wor
     and distributed bag of words (forcing predictions of words in each paragraph with concatenation of paragraph and word
 vectors).</p>
 
-<p>An alternative approach to purpose clustering using <b>doc2vec</b> trained a model with all existing <b>purpose</b> only fields of
-drug labels, and inferred a collection of vectors from relevant drug label purposes. These were clustered using KMeans.
+<p>An alternative approach to purpose clustering using <b>doc2vec</b> trained a model with all existing <b>combined_purpose</b> fields of
+drug labels, and inferred a collection of vectors from relevant drug label purposes. The array of vectors was clustered using KMeans.
     With <b>doc2vec</b> implementation, there is not a direct ability to obtain top keywords as with TF-IDF. When grouped together
-under the same cluster, there did appear to be congruencies between types of drug products and clusters, with potential anomalies.
+under the same cluster, there did appear to be congruencies between types of drug products and clusters, though with potential anomalies.
     Given the more involved nature of training and implementation of a model developed for unsupervised clustering, without a clearly
-    more effective result and without direct feature word relation, TF-IDF was chosen still to be the main, faster, and
-    reasonably thorough method. If <b>doc2vec</b> is chosen again to cluster based on the larger combined <b>purpose</b>
-    and <b>indications and usage</b> fields' content, it may be more effective at parsing semantic meaning.</p>
+    more effective result and without direct feature-word relation, TF-IDF was chosen still to be the main, faster, and
+    reasonably thorough method. If <b>doc2vec</b> is chosen again to cluster based on <b>purpose</b>-only or
+    <b>combined_purpose</b> fields' content, it may be more effective at parsing semantic meaning with refinement.</p>
 
 <p>Out of curiosity, <b>doc2vec</b> vectors of <b>purpose</b>-only fields of drug labels were clustered using
     Latent Dirichlet Allocation into topics to observe whether purposes could fall into clearly defined groups. This yielded
 much fewer topics than the 50 topic/cluster cutoff. The topics were defined but rather general. Several identifiable subsets,
 such as pairing nighttime sleep aids with rash medication, remained together. This was ultimately not the better way to
-categorize purposes for proper visualization of subsets of drugs.</p>
+categorize purposes for proper visualization of subsets of drugs and would likely have happened with <b>combined_purpose</b>.</p>
 
 <p>Cosine similarity calculations were also performed with paragraph vectors, inferred from models trained on unlisted
     drug labels (those without a valid <b>purpose</b> field). Each model was trained for a specific field (e.g. <b>warnings</b>
@@ -162,6 +163,7 @@ of a particular purpose based on the user-selected drug field content. The edges
     <li>Brand name</li>
     <li>Route</li>
     <li>Product type</li>
+    <li>Purpose for a succinct summary, or Indications and Usage if no Purpose field is found</li>
     <li>Relevant field content</li>
 </ul>
 
@@ -171,12 +173,19 @@ of a particular purpose based on the user-selected drug field content. The edges
     applied directly using the Flask backend. This led to generation of the interactive visualizations as static (but interactable)
     HTML network graph dashboards from <b>bokeh</b> and static image file generation of the word clouds for each of the
     finite combinations of 50 purposes of drug labels sorted by one of five fields, resulting in ~250 combinations minus
-    clusters of drug labels that do not happen to have valid entries for a particular field. </p>
+    clusters of drug labels that did not happen to have valid entries for a particular field. </p>
+
+<p>The index page was generated using the valid combinations of purposes and fields (stored in hard-coded dictionaries within the app).
+<b>select2</b> was used to create a search-select box for the purposes.
+    Additional <b>JS</b> code was written to create dynamic disabling of fields for purposes that had no valid visualizations for those fields.</p>
+
+<p>The results page was rendered using dynamic urls such that someone could paste the known purpose and fields to reload the page.
+The results page mainly formatted and embedded upon the <b>Amazon S3</b> static HTML and image files to allow user interaction.</p>
 
 <p>Static files were served on a public read-only <b>Amazon S3</b> bucket, to be retrieved when the user submitted the relevant
 selections for purpose and field.</p>
 
-<p>Web hosting plans can certainly be expanded, especially in paid services, to allow for more dynamic background processes
+<p>Web hosting plans could certainly be expanded, especially in paid services, to allow for more dynamic background processes
 or to host more RAM on the server. This was the workaround for the scope of the Capstone.</p>
 
 

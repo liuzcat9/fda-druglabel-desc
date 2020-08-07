@@ -9,16 +9,16 @@
                 <div class="form-group">
                     <div class="col-lg">
                         <b>Purpose:</b>
-                        <select class="select2-container" style="text-align: left" name="purpose_res">
-                            {% for purpose in purposes %}
-                            <option data-tokens="{{ purpose }}">{{ purpose }}</option>
+                        <select id="purposeSelect" class="select2-container" style="text-align: left" name="purpose_res">
+                            {% for purpose in purposes.keys() %}
+                            <option value="{{ purpose }}">{{ purpose }}</option>
                             {% endfor %}
                         </select>
 
                         <b>Sort by field:</b>
-                        <select class="select2-container" name="field_res">
-                            {% for field in fields %}
-                            <option>{{ field }}</option>
+                        <select id="fieldSelect" name="field_res">
+                            {% for field in fields.keys() %}
+                            <option value="{{ field }}">{{ field }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -42,7 +42,30 @@
     $(document).ready(function() {
         $('.select2-container').select2();
     });
+</script>
 
+<!-- script to disable certain fields not searchable by file name, because not enough drugs were included-->
+<script>
+    var purposes = {{ purposes | tojson }}
+    var reversed_fields = {{ reversed_fields | tojson }}
+    var disabledDict = {{ disabled_field_dict | tojson }}
+
+    $('select#purposeSelect').on('change', function() {
+        $('select#fieldSelect option').prop('disabled', false);
+
+        var disableOption = disabledDict[purposes[$(this).val()]];
+        $.each(disableOption, function(i) {
+            $('option[value="' + reversed_fields[disableOption[i]] + '"]').prop('disabled', 'disabled');
+        });
+
+        var first_valid_i = 0
+        $('select#fieldSelect option').each(function(i) {
+            if ($(this).prop('disabled') == false) {
+                $('select#fieldSelect').val($(this).val())
+            }
+        });
+
+    });
 
 </script>
 
