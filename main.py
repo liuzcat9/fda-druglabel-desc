@@ -1,4 +1,5 @@
 import time
+from os import walk
 
 import json, ijson
 import string
@@ -563,7 +564,8 @@ def generate_cluster_num_to_html(purpose_df, cluster_ref, field):
     raw_df = preprocessing.read_preprocessed_to_pkl("indic_full_drug_df")
 
     # join relevant raw field to cleaned dataframe
-    full_df = pd.merge(purpose_df, raw_df[["id", field]].add_suffix("_raw"), left_on='id', right_on='id_raw',
+    full_df = pd.merge(purpose_df, raw_df[["id", "purpose", "indications_and_usage", field]].add_suffix("_raw"),
+                       left_on='id', right_on='id_raw',
                        how="left")
 
     print("New dataframe joined:", str(full_df.shape))
@@ -580,6 +582,8 @@ def generate_cluster_num_to_html(purpose_df, cluster_ref, field):
             blurb = ("<b>Brand name: </b>" + row["brand_name"] + "<br/>"
             + "<b>Route: </b>" + row["route"] + "<br/>"
             + "<b>Drug Type: </b>" + row["product_type"] + "<br/>"
+            + "<b>Purpose/Indications and Usage: </b>" + (row["purpose_raw"] if (row["purpose_raw"] and row["purpose_raw"] != "")
+                                                          else row["indications_and_usage_raw"]) + "<br/>"
             + "<b>" + " ".join([word.capitalize() for word in field.split("_")]) + ": </b>"
             + row[field + "_raw"])
             html_str = """
@@ -786,6 +790,29 @@ def create_web_graph(purpose, field):
 
     return script, div
 
+# obtain a dictionary containing all disabled fields for files generated (ex: a certain purpose may not have enough active ingredients, etc)
+def obtain_disabled_fields_dict_from_files(dir):
+    files = []
+    for (dirpath, dirnames, filenames) in walk(dir):
+        files.extend(filenames)
+
+    files_df = pd.DataFrame(filenames, columns=["full_name"])
+    files_df["purpose_cluster"], files_df["field"] = zip(*files_df["full_name"].str.split("-"))
+
+    # clean entries to uniform purpose and field descriptors
+    files_df["purpose_cluster"] = files_df["purpose_cluster"].str.split("_").str.join(" ")
+    files_df["field"] = files_df["field"].str.split(".").str[0]
+
+    valid_fields = ["active_ingredient", "inactive_ingredient", "dosage_and_administration", "warnings"]
+
+    # create a dictionary of disabled fields (nonexistent fields) based on file names
+    purpose_cluster_groups = files_df.groupby("purpose_cluster")
+    field_dict = {}
+    for name, purpose_cluster in purpose_cluster_groups:
+        field_dict[name] = [field for field in valid_fields if field not in set(purpose_cluster["field"])]
+
+    print(field_dict)
+
 # main
 def main():
     # file read and setup
@@ -817,7 +844,7 @@ def main():
     # purposes = ["indicate usage patient symptom tablet"]
     # fields = ["warnings"]
 
-    for purpose in purposes[29:]:
+    for purpose in purposes:
         for field in fields:
             print("Parsing", purpose, "with", field)
             purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
@@ -835,8 +862,8 @@ def main():
             # generate_graph_plot(venn_G, purpose, field)
             # print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
 
-            # certain fields for certain clusters are None, completely
-            if len(purpose_df.index) > 0:
+            # certain fields for certain clusters are None, or single so can't be weighted
+            if len(purpose_df.index) > 1:
                 full_graph_t0 = time.time()
                 # 3. Generate a graph node network of top products and their similarity to each other
                 adj_mat, sparse_mat, attr_dict, num_to_name, num_to_html = \
@@ -853,6 +880,9 @@ def main():
                 # 6: Plot word cloud
                 # save word cloud for purpose cluster - field combo
                 save_wordcloud(purpose_df, purpose, field)
+
+    # obtain a dictionary containing all disabled fields for files generated (ex: a certain purpose may not have enough active ingredients, etc)
+    obtain_disabled_fields_dict_from_files("static/purpose-field")
 
     # 4: plot heatmap using adjacency matrix for all matches
     # TODO: fix name reference
