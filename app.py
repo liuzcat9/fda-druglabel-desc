@@ -25,7 +25,7 @@ purposes = {"Hand Sanitizer and Cleanser": 'antiseptic bacteria hand skin decrea
        "Additional Foaming and Cleansing Sanitizers": 'repeat recommend bacteria decrease skin',
        "Muscle and Joint Relief": 'muscle sprain analgesic simple backache',
        "Anti-dandruff and Antifungal": 'dandruff itch tinea flake athlete',
-       "Skin/Acne Treatment": 'acne medication management rosacea vulgaris',
+       "Skin and Acne Treatment": 'acne medication management rosacea vulgaris',
        "Aspirin and Additional Pain Relief": 'pain ache fever minor temporarily',
        "Cough Relief": 'cough suppressant throat irritation sore',
        "Skin Repair and Rash Relief": 'protect skin protectant help chap',
