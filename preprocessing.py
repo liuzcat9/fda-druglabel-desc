@@ -4,8 +4,12 @@ import pandas as pd
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 import spacy
+
+# custom files
+import main
 
 # Takes in a list
 # Removes the word "purpose" and "use" and punctuation
@@ -88,10 +92,12 @@ def preprocess_and_write_df(raw_drug_df, filename):
 
 ## sklearn
 # sklearn purpose cluster: top terms per cluster
-def obtain_top_cluster_terms(tfidfv, km, n_cluster):
+def obtain_top_cluster_terms(tfidfv, lsa, km, n_cluster):
     print("Top terms per cluster:")
     top_t0 = time.time()
-    order_centroids = km.cluster_centers_.argsort()[:, ::-1]
+    original_centroids = lsa.inverse_transform(km.cluster_centers_)
+    order_centroids = original_centroids.argsort()[:, ::-1]
+
     terms = tfidfv.get_feature_names()
     cluster_list = []
     for i in range(n_cluster):
@@ -123,15 +129,17 @@ def cluster_purpose(drug_df):
     X = tfidfv.fit_transform(purpose_list)
     print("TF-IDF: ", str(time.time() - tfidfv_t0))
 
+    lsa, transformedX = main.perform_LSA(X)
+
     # KMeans
     km_t0 = time.time()
     km = KMeans(n_clusters=50)
-    km.fit(X)
+    km.fit(transformedX)
     print("Fit KMeans: ", str(time.time() - km_t0))
 
     print("Num KMeans labels: ", str(len(km.labels_)))
 
-    cluster_list = obtain_top_cluster_terms(tfidfv, km, 50)
+    cluster_list = obtain_top_cluster_terms(tfidfv, lsa, km, 50)
 
     cluster_groups_to_df(drug_df, km, cluster_list)
 
