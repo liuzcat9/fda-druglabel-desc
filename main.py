@@ -1,4 +1,5 @@
 import time
+from os import walk
 
 import json, ijson
 import string
@@ -233,6 +234,7 @@ def create_tfidf(field_list):
     tfidfv = TfidfVectorizer()
     fieldX = tfidfv.fit_transform(field_list)
     print("TF-IDF Field: ", str(time.time() - tfidfv_t0))
+    print("TF-IDF Matrix Dim:", str(fieldX.shape))
 
     return fieldX
 
@@ -373,32 +375,38 @@ def run_density_cluster(X):
 
 
 # perform TruncatedSVD (LSA for TD-IDF) to see if dimensionality can be sufficiently reduced
-def perform_LSA(drug_df, field="purpose"):
-    # TF-IDF
-    purposeX = create_tfidf(drug_df[field].tolist())
-
+def perform_LSA(fieldX):
     # LSA
-    lsa = TruncatedSVD(n_components=100)
-    lsa.fit(purposeX)
-    print(sum(lsa.explained_variance_ratio_))
+    lsa_t0 = time.time()
+    # n_components found by checking explained variance for combined_purpose
+    lsa = TruncatedSVD(n_components=300)
+    lsa.fit(fieldX)
+    print("TruncatedSVD Explained Variance:", str(sum(lsa.explained_variance_ratio_)))
 
-    return lsa.fit_transform(purposeX)
+    transformed_purposeX = lsa.fit_transform(fieldX)
+    print("TruncatedSVD:", str(time.time() - lsa_t0))
+
+    return lsa, transformed_purposeX
 
 # perform silhouette/inertia scoring for TF-IDF > KMeans clustering
 def perform_kmeans_scoring(drug_df):
     # TF-IDF
     tfidfv_t0 = time.time()
-    purpose_list = drug_df["combined_purpose"].tolist()
+    purpose_list = drug_df["purpose"].tolist()
     tfidfv = TfidfVectorizer()
     X = tfidfv.fit_transform(purpose_list)
     print("TF-IDF: ", str(time.time() - tfidfv_t0))
+    print("TF-IDF matrix shape:", str(X.shape))
+
+    lsa, transformedX = perform_LSA(X)
+    print("Transformed shape:", str(transformedX.shape))
 
     # Perform inertia/silhouette scoring for new data frame of 81,501
     # collect average scores
     avg_silhouettes = {}
     avg_inertias = {}
     # KMeans
-    n_clusters_range = [10, 50]
+    n_clusters_range = [10, 50, 100, 500, 1000]
     # find ideal number of clusters
     for n_clusters in n_clusters_range:
         n_trials = 5
@@ -407,10 +415,10 @@ def perform_kmeans_scoring(drug_df):
         # conduct multiple trials per n_clusters
         for trial in range(n_trials):
             km = KMeans(n_clusters=n_clusters)
-            km.fit(X)
+            km.fit(transformedX)
 
             # Calculate the mean silhouette coefficient for the number of clusters chosen
-            sum_sil += silhouette_score(X, km.predict(X), metric='euclidean')
+            sum_sil += silhouette_score(transformedX, km.predict(transformedX), metric='euclidean')
             sum_inert += km.inertia_
 
         avg_silhouettes[n_clusters] = sum_sil / n_trials
@@ -563,7 +571,8 @@ def generate_cluster_num_to_html(purpose_df, cluster_ref, field):
     raw_df = preprocessing.read_preprocessed_to_pkl("indic_full_drug_df")
 
     # join relevant raw field to cleaned dataframe
-    full_df = pd.merge(purpose_df, raw_df[["id", field]].add_suffix("_raw"), left_on='id', right_on='id_raw',
+    full_df = pd.merge(purpose_df, raw_df[["id", "purpose", "indications_and_usage", field]].add_suffix("_raw"),
+                       left_on='id', right_on='id_raw',
                        how="left")
 
     print("New dataframe joined:", str(full_df.shape))
@@ -580,6 +589,8 @@ def generate_cluster_num_to_html(purpose_df, cluster_ref, field):
             blurb = ("<b>Brand name: </b>" + row["brand_name"] + "<br/>"
             + "<b>Route: </b>" + row["route"] + "<br/>"
             + "<b>Drug Type: </b>" + row["product_type"] + "<br/>"
+            + "<b>Purpose/Indications and Usage: </b>" + (row["purpose_raw"] if (row["purpose_raw"] and row["purpose_raw"] != "")
+                                                          else row["indications_and_usage_raw"]) + "<br/>"
             + "<b>" + " ".join([word.capitalize() for word in field.split("_")]) + ": </b>"
             + row[field + "_raw"])
             html_str = """
@@ -786,13 +797,38 @@ def create_web_graph(purpose, field):
 
     return script, div
 
+# obtain a dictionary containing all disabled fields for files generated (ex: a certain purpose may not have enough active ingredients, etc)
+def obtain_disabled_fields_dict_from_files(dir):
+    files = []
+    for (dirpath, dirnames, filenames) in walk(dir):
+        files.extend(filenames)
+
+    files_df = pd.DataFrame(filenames, columns=["full_name"])
+    files_df["purpose_cluster"], files_df["field"] = zip(*files_df["full_name"].str.split("-"))
+
+    # clean entries to uniform purpose and field descriptors
+    files_df["purpose_cluster"] = files_df["purpose_cluster"].str.split("_").str.join(" ")
+    files_df["field"] = files_df["field"].str.split(".").str[0]
+
+    valid_fields = ["active_ingredient", "inactive_ingredient", "dosage_and_administration", "warnings"]
+
+    # create a dictionary of disabled fields (nonexistent fields) based on file names
+    purpose_cluster_groups = files_df.groupby("purpose_cluster")
+    field_dict = {}
+    for name, purpose_cluster in purpose_cluster_groups:
+        field_dict[name] = [field for field in valid_fields if field not in set(purpose_cluster["field"])]
+
+    print(field_dict)
+
 # main
 def main():
     # file read and setup
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
                  "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
-    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_indic_full_drug_df")
+    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
+    purpose_df = drug_df.copy()
+    purpose_df = purpose_df.dropna(subset=["id", "brand_name", "route", "product_type"])
 
     print(drug_df[0:10]) # verify read
     print(drug_df.shape)
@@ -806,53 +842,57 @@ def main():
     # draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
 
     # 7. Perform KMeans scoring on purpose/indication combination clustering sort
-    # perform_kmeans_scoring(drug_df)
+    # on OTC and prescription drugs separately
+    perform_kmeans_scoring(purpose_df)
 
-    # 3b. Automate process to obtain node network graphs of purpose_field combinations
-    purposes = preprocessing.find_unique_purposes(drug_df)
-    fields = ["active_ingredient", "inactive_ingredient", "warnings", "dosage_and_administration"]
-
-    print(purposes)
-
-    # purposes = ["indicate usage patient symptom tablet"]
-    # fields = ["warnings"]
-
-    for purpose in purposes[29:]:
-        for field in fields:
-            print("Parsing", purpose, "with", field)
-            purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
-
-            # # 2b: Use purpose to find top products to compare
-            # full_graph_t0 = time.time()
-            # # 3. Generate a graph node network of top products and their similarity to each other
-            # adj_mat, sparse_mat, attr_dict, num_to_name = \
-            #     generate_similarity_matching_field_of_purpose(purpose_df, field, topics=False)
-            #
-            # # create graph
-            # venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
-            # print("Time to build graph:", str(time.time() - full_graph_t0))
-            #
-            # generate_graph_plot(venn_G, purpose, field)
-            # print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
-
-            # certain fields for certain clusters are None, completely
-            if len(purpose_df.index) > 0:
-                full_graph_t0 = time.time()
-                # 3. Generate a graph node network of top products and their similarity to each other
-                adj_mat, sparse_mat, attr_dict, num_to_name, num_to_html = \
-                    generate_similarity_matching_field_of_purpose(purpose_df, field)
-
-                # create graph
-                venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
-                print("Time to build graph:", str(time.time() - full_graph_t0))
-
-                bokeh_script, bokeh_div = generate_graph_plot(venn_G, purpose, field, num_to_html, topics=True)
-                save_html_template(bokeh_script, bokeh_div, purpose, field)
-                print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
-
-                # 6: Plot word cloud
-                # save word cloud for purpose cluster - field combo
-                save_wordcloud(purpose_df, purpose, field)
+    # # 3b. Automate process to obtain node network graphs of purpose_field combinations
+    # purposes = preprocessing.find_unique_purposes(drug_df)
+    # fields = ["active_ingredient", "inactive_ingredient", "warnings", "dosage_and_administration"]
+    #
+    # print(purposes)
+    #
+    # # purposes = ["indicate usage patient symptom tablet"]
+    # # fields = ["warnings"]
+    #
+    # for purpose in purposes:
+    #     for field in fields:
+    #         print("Parsing", purpose, "with", field)
+    #         purpose_df = find_df_fitting_purpose(drug_df, purpose, field)
+    #
+    #         # # 2b: Use purpose to find top products to compare
+    #         # full_graph_t0 = time.time()
+    #         # # 3. Generate a graph node network of top products and their similarity to each other
+    #         # adj_mat, sparse_mat, attr_dict, num_to_name = \
+    #         #     generate_similarity_matching_field_of_purpose(purpose_df, field, topics=False)
+    #         #
+    #         # # create graph
+    #         # venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
+    #         # print("Time to build graph:", str(time.time() - full_graph_t0))
+    #         #
+    #         # generate_graph_plot(venn_G, purpose, field)
+    #         # print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
+    #
+    #         # certain fields for certain clusters are None, or single so can't be weighted
+    #         if len(purpose_df.index) > 1:
+    #             full_graph_t0 = time.time()
+    #             # 3. Generate a graph node network of top products and their similarity to each other
+    #             adj_mat, sparse_mat, attr_dict, num_to_name, num_to_html = \
+    #                 generate_similarity_matching_field_of_purpose(purpose_df, field)
+    #
+    #             # create graph
+    #             venn_G = generate_purpose_graph(sparse_mat, attr_dict, num_to_name)
+    #             print("Time to build graph:", str(time.time() - full_graph_t0))
+    #
+    #             bokeh_script, bokeh_div = generate_graph_plot(venn_G, purpose, field, num_to_html, topics=True)
+    #             save_html_template(bokeh_script, bokeh_div, purpose, field)
+    #             print("Time to generate graph for", purpose, "-", field, ":", str(time.time() - full_graph_t0))
+    #
+    #             # 6: Plot word cloud
+    #             # save word cloud for purpose cluster - field combo
+    #             save_wordcloud(purpose_df, purpose, field)
+    #
+    # # obtain a dictionary containing all disabled fields for files generated (ex: a certain purpose may not have enough active ingredients, etc)
+    # obtain_disabled_fields_dict_from_files("static/purpose-field")
 
     # 4: plot heatmap using adjacency matrix for all matches
     # TODO: fix name reference
