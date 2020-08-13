@@ -379,7 +379,7 @@ def perform_LSA(fieldX):
     # LSA
     lsa_t0 = time.time()
     # n_components found by checking explained variance for combined_purpose
-    lsa = TruncatedSVD(n_components=520)
+    lsa = TruncatedSVD(n_components=300)
     lsa.fit(fieldX)
     print("TruncatedSVD Explained Variance:", str(sum(lsa.explained_variance_ratio_)))
 
@@ -392,10 +392,11 @@ def perform_LSA(fieldX):
 def perform_kmeans_scoring(drug_df):
     # TF-IDF
     tfidfv_t0 = time.time()
-    purpose_list = drug_df["combined_purpose"].tolist()
+    purpose_list = drug_df["purpose"].tolist()
     tfidfv = TfidfVectorizer()
     X = tfidfv.fit_transform(purpose_list)
     print("TF-IDF: ", str(time.time() - tfidfv_t0))
+    print("TF-IDF matrix shape:", str(X.shape))
 
     lsa, transformedX = perform_LSA(X)
     print("Transformed shape:", str(transformedX.shape))
@@ -825,7 +826,9 @@ def main():
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
                  "drug-label-0004-of-0009.json", "drug-label-0005-of-0009.json", "drug-label-0006-of-0009.json",
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
-    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_indic_full_drug_df")
+    drug_df = parse_json.obtain_preprocessed_drugs(json_list, "purpose_full_drug_df")
+    purpose_df = drug_df.copy()
+    purpose_df = purpose_df.dropna(subset=["id", "brand_name", "route", "product_type"])
 
     print(drug_df[0:10]) # verify read
     print(drug_df.shape)
@@ -839,7 +842,8 @@ def main():
     # draw_venn(drug_df, "97f91168-9f82-34bc-e053-2a95a90a33f8", "indications_and_usage")  # VERATRUM ALBUM
 
     # 7. Perform KMeans scoring on purpose/indication combination clustering sort
-    perform_kmeans_scoring(drug_df)
+    # on OTC and prescription drugs separately
+    perform_kmeans_scoring(purpose_df)
 
     # # 3b. Automate process to obtain node network graphs of purpose_field combinations
     # purposes = preprocessing.find_unique_purposes(drug_df)
