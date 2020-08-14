@@ -571,7 +571,7 @@ def generate_cluster_num_to_html(purpose_df, cluster_ref, field):
     raw_df = preprocessing.read_preprocessed_to_pkl("indic_full_drug_df")
 
     # join relevant raw field to cleaned dataframe
-    full_df = pd.merge(purpose_df, raw_df[["id", "purpose", "indications_and_usage", field]].add_suffix("_raw"),
+    full_df = pd.merge(purpose_df, raw_df[["id", "purpose", field]].add_suffix("_raw"),
                        left_on='id', right_on='id_raw',
                        how="left")
 
@@ -589,10 +589,8 @@ def generate_cluster_num_to_html(purpose_df, cluster_ref, field):
             blurb = ("<b>Brand name: </b>" + row["brand_name"] + "<br/>"
             + "<b>Route: </b>" + row["route"] + "<br/>"
             + "<b>Drug Type: </b>" + row["product_type"] + "<br/>"
-            + "<b>Purpose/Indications and Usage: </b>" + (row["purpose_raw"] if (row["purpose_raw"] and row["purpose_raw"] != "")
-                                                          else row["indications_and_usage_raw"]) + "<br/>"
-            + "<b>" + " ".join([word.capitalize() for word in field.split("_")]) + ": </b>"
-            + row[field + "_raw"])
+            + "<b>Purpose: </b>" + row["purpose_raw"] + "<br/>"
+            + "<b>" + " ".join([word.capitalize() for word in field.split("_")]) + ": </b>" + row[field + "_raw"])
             html_str = """
             <div class="card">
                 <div class="card-header">
