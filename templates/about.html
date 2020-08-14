@@ -1,19 +1,40 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>About</h2>
+<div class="jumbotron">
+    <h2>Contents</h2>
+<ul>
+    <li><a href="#about">About</a></li>
+    <li><a href="#originalDataset">Original Dataset</a></li>
+    <li><a href="#preprocessing">Preprocessing</a></li>
+    <ul>
+        <li><a href="#combinedPurpose">Alternate Preprocessing and Clustering</a></li>
+    </ul>
+    <li><a href="#visualizations">Visualizations</a></li>
+    <ul>
+        <li><a href="#wordCloud">Word Cloud Visualization</a></li>
+        <li><a href="#networkVis">Network Graph Visualization</a></li>
+        <li><a href="#doc2vec">Word Embedding for Clustering and Cosine Similarity</a></li>
+    </ul>
+    <li><a href="#interactivity">Network Visualization Interactivity</a></li>
+    <li><a href="#webApp">Web Application Deployment</a></li>
+</ul>
+
+</div>
+
+<h2 id="about">About</h2>
 <h5>This page is meant to provide insight into the data and workflow used to produce the visualizations of the application.</h5>
 
-<h5>The overall <b>goal</b> of FDA Drug Label Visualization is to provide the opportunity to visually traverse a network graph
-    containing a wide array of drugs serving a particular <b>purpose</b> to observe similarities and differences within the contents of its drug label <b>fields</b>.</h5>
+<p>The overall goal of FDA Drug Label Visualization is to provide the opportunity to visually traverse a network graph
+    containing a wide array of drugs serving a particular <b>purpose</b> to observe similarities and differences within the contents of its drug label <b>fields</b>.</p>
 
-<p>Plenty of information is available on the Internet regarding FDA-approved drugs, but remains primarily in text-based formats without
-a way to zoom in and out of various subsets of drugs. With the FDA drug label data, a visualization relating drugs to
+<p>Plenty of information is available on the Internet regarding FDA-approved drugs, but it remains primarily in text-based formats without
+a way to zoom in and out of various subsets of drugs. Conslidating FDA drug label data into a visualization relating drugs to
 each other may be an approachable answer. This type of visualization network may be useful not only for observing relationships between drugs, but
 any other content that contains extensive subcategories and products.
-    The application is a functional, static-based but interactive proof-of-concept visualization.</p>
+    The proof-of-concept application on this website is a functional, static-based but interactive web visualization.</p>
 
-<h2>Original Dataset</h2>
+<h2 id="originalDataset">Original Dataset</h2>
 <p>The full data set is available on <a href="https://open.fda.gov/downloads/">openFDA</a> as API endpoint data.
 It consists of a collection of 9 JSON files, each around 600 MB uncompressed save the last.
 The endpoint is continuously being updated.
@@ -25,68 +46,125 @@ filled-in fields. To obtain drug labels containing information relevant for this
 drug labels that did not meet the completeness requirement were dropped. In the future, possible inclusion of this data could
 be performed for a complete overview of all current FDA-approved drugs, but this may require imputation of empty, important fields.</p>
 
-<h2>Preprocessing</h2>
+<h2 id = "preprocessing">Preprocessing</h2>
 <p>The endpoint data was read altogether into a master dataframe using <b>ijson</b>, where only drug labels with valid <b>purpose</b>
-    or <b>indications and usage</b> fields were compiled.
-This resulted in ~159,800 drug labels with complete fields for <b>purpose</b> or <b>indications and usage</b>. Both of these fields
-    were chosen, as certain drugs (primarily prescription drugs) did not have a valid <b>purpose</b> field.
-    The <b>indications and usage</b> field typically elaborates on the purpose, with some information on usage. For certain drugs,
-    the <b>purpose</b> is more relevant, and for others the <b>indications and usage</b> is.
+    fields were compiled. This resulted in ~95,000 drug labels derived from the approximately 160,000 drug labels in the entire dataset.</p>
 
-The display of drug types for this raw dataset is as follows.
+The display of drug types for this purpose dataset is as follows.
 
-<img src="{{ url_for('static', filename='about/OTC_Presc_purpose_indic.png') }}">
+<figure>
+    <img src="{{ url_for('static', filename='about/OTC_Presc_purpose.png') }}">
+    <figcaption>Drug Types (OTC, Prescription)</figcaption>
+</figure>
 
-<p>From this dataframe, drug labels without adequate descriptive fields for the user:
-    <b>brand_name, route, product_type (OTC/Prescription)</b> were dropped from the dataframe.</p>
-<p>Ultimately, there were about 81,000 "complete" drug labels corresponding to drugs for the purpose of the project.</p>
+<p>However, to provide drug labels with adequate descriptive fields for the user, drug labels with invalid
+    <b>brand_name, route, product_type (OTC/Prescription)</b>
+    were dropped from the dataframe to yield 51,940 final drug labels pickled into a file for use in preprocessing.</p>
 
 <p>For the remaining valid drug labels, the following fields were tokenized and lemmatized by <b>spacy</b>:
-    <b>purpose, indications_and_usage, active_ingredient, inactive_ingredient, warnings, dosage_and_administration</b>.
-    These would be the fields selectable by the user: clusters of different <b>purpose/indications and usage</b> drugs
-    and the field by which to sort those <b>purpose/indications and usage</b> in terms of similarity. <br/>
-Several words were openly restricted from the space: "purpose", "use", "active", "inactive", "ingredient", "warning", "treatment", "indication."
+    <b>purpose, active_ingredient, inactive_ingredient, warnings, dosage_and_administration, indications_and_usage</b>
+    and pickled as a separate dataframe.
+    These would be the fields selectable by the user: clusters of different <b>purpose</b> drugs
+    and the field by which to sort those drug labels belonging to that <b>purpose</b> in terms of similarity. <br/>
+Several word lemmas were openly restricted from the tokenized output: "purpose", "use", "active", "inactive", "ingredient", "warning", "treatment", "indication."
 These words were extremely common and not informative to the visualizations.</p>
 
-<p>The drug labels were clustered into 50 purposes such that the user will be able to select from these pre-sorted purposes when observing drugs.</p> <br/>
-<p>The preprocessed <b>purpose</b> and <b>indications and usage</b> fields were concatenated together as one
-    <b>combined_purpose</b> for all valid drug labels, which were transformed into TF-IDF matrices.</p> <br/>
+<p>The drug labels were clustered into 50 purposes such that the user would be able to select from these pre-sorted purposes when observing drugs.</p> <br/>
+<p>The preprocessed <b>purpose</b> fields for all valid drug labels were transformed into a TF-IDF matrix.</p> <br/>
 
 <p>Term frequency-inverse document frequency (TF-IDF) is a common representation for documents consisting of phrases to sentences.
     It accounts for appearance of words in documents, while weighting against rather mundane words that typically appear in the English language.</p> <br/>
 
-<p>K-means clustering, an unsupervised clustering method defaulted to Euclidean distance, was performed on the TF-IDF transformed drug label combined purposes.
-K-means partitioned all (purposes of) drug labels into a preset 50 clusters. In the naive implementation, k-means assigns drug labels
-to centroids and repeatedly updates the means based on least squared Euclidean distance until convergence (assignment unchanging).
-A rather arbitrary 50 clusters (silhouette score ~ .5) was chosen after intended optimization maximizing silhouette scores and reducing inertia revealed that
-    the clusters were not decreasing in effectiveness past 1000 clusters, which would be unmanageable both for users and project scope.
-Top importance keywords were retrieved from the TF-IDF features corresponding to each of these 50 clusters,
-as the summary of purpose per cluster. Though clustering results were not perfect, some categories were particularly effective
-and specific. Further refinement on clustering method as well as lack of or increased text preprocessing may improve results.</p> <br/>
+<p>With likely tens of thousands of features, the columns of the TF-IDF matrix were consolidated to 300 by
+<b>sklearn</b> TruncatedSVD, or essentially latent semantic analysis (LSA). Truncated singular value decomposition results in linear
+dimensionality reduction. Unlike PCA, which brings about a similar end product, it is particularly ideal for sparse matrices.
+TruncatedSVD, or LSA with respect to natural language processing constructs a lower-dimension representation of the documents:
+    in this case, the documents would be the drug label purposes.</p>
 
-<img src="{{ url_for('static', filename='about/silhouette.png') }}">
+<p>K-means clustering, an unsupervised clustering method defaulted to Euclidean distance, was performed on the TF-IDF transformed drug label purposes.
+K-means partitioned all (purposes of) drug labels into a preset number of clusters. In the naive implementation, k-means assigns drug labels
+to centroids and repeatedly updates the means based on least squared Euclidean distance until convergence (assignment unchanging).
+K-means clustering effectiveness can be represented by the inertia--sum of squared distances between samples and
+    identified clusters--and silhouette scores--an indication of how well samples in their respective clusters are separated from others.
+    Inertia should be minimized and silhouette should be maximized for an ideal number of clusters.</p>
+
+<p>K-means was first performed without SVD, resulting in the following general trend for inertia and silhouette from 10-1000 clusters.</p>
+
+<figure>
+    <img src="{{ url_for('static', filename='about/silhouette_no_lsa.png') }}">
+    <figcaption>Inertia and Silhouette Scores for Purpose Clusters Without SVD</figcaption>
+</figure>
+
+<p>K-means was later performed with the SVD matrix, resulting in slightly higher silhouette scores consistently and faster computation time.</p>
+
+<figure>
+    <img src="{{ url_for('static', filename='about/silhouette.png') }}">
+    <figcaption>Inertia and Silhouette Scores for Purpose Clusters With SVD (Final)</figcaption>
+</figure>
+
+
+<p>A rather arbitrary 50 clusters (silhouette score = .589) was chosen after intended optimization of cluster number
+    maximizing silhouette scores and reducing inertia revealed that the clusters were not decreasing in effectiveness past 1000 clusters,
+    which would be unmanageable both for users and project scope.
+Top importance keywords were retrieved from the TF-IDF features corresponding to each of these 50 clusters,
+to constitute the purpose per cluster. Though clustering results were not perfect, some categories were particularly effective
+and specific. Further refinement on clustering method as well as lack of or increased text preprocessing may improve results.</p> <br/>
 
 <p>Here is the distribution of drug labels among the final purpose clusters.</p>
 
-<img src="{{ url_for('static', filename='about/per_cluster_all.png') }}">
+<figure>
+    <img src="{{ url_for('static', filename='about/per_cluster_all.png') }}">
+    <figcaption>Counts of Drug Labels Per Labeled Purpose Cluster</figcaption>
+</figure>
 
-<h2>Visualizations</h2>
-<p>For every combination of combined purpose (<b>purpose</b> and <b>indications and usage</b>) with the relevant fields
-    (<b>active ingredient, inactive ingredient, dosage and administration, warnings</b>), the following visualizations were generated.</p>
+<h3 id="combinedPurpose">Alternate Preprocessing and Clustering</h3>
+
+<p>Another method of identifying drugs was by compiling both the drug labels' <b>purpose</b> and <b>indications and usage</b> fields.
+This resulted in ~159,800 drug labels with complete fields for <b>purpose</b> or <b>indications and usage</b>. Both of these fields
+    were chosen to include more of the dataset, as certain drugs (primarily prescription drugs) did not have a valid <b>purpose</b> field.
+    The <b>indications and usage</b> field typically elaborates on the purpose, with some information on usage. For certain drugs,
+    the <b>purpose</b> is more relevant, and for others the <b>indications and usage</b> is.</p>
+
+<p>Again, drug labels without adequate descriptive fields for the user:
+    <b>brand_name, route, product_type (OTC/Prescription)</b> were dropped from the dataframe.
+    Ultimately, there were about 81,000 "complete" drug labels corresponding to drugs for the purpose of the project.</p>
+
+<p>All relevant drug label fields were similarly tokenized and lemmatized as in the final analysis with the blacklisted word lemmas.
+The preprocessed <b>purpose</b> and <b>indications and usage</b> fields were now concatenated together as one
+    <b>combined_purpose</b> for each of the valid drug labels. This preprocessed result was pickled as a separate dataframe.</p>
+
+<p>The <b>combined_purpose</b> of all valid drug labels was transformed into a TF-IDF matrix.
+TruncatedSVD/LSA required around a 500 feature length to surpass 80% explained variance of the transformed TF-IDF.
+K-means performed with 10-1000 clusters on the <b>combined_purpose</b> dataset demonstrated poorer scores and thus likely poorer
+    clustering performance than the K-means performed with only the <b>purpose</b> dataset. Scoring with split drug datasets
+clustering OTC drugs (typically shorter descriptions) and prescription drugs (typically longer descriptions) was also poorer.</p>
+
+<figure>
+    <img src="{{ url_for('static', filename='about/silhouette_combined_purpose.png') }}">
+    <figcaption>Inertia and Silhouette Scores for Combined Purpose Clusters With SVD (Final)</figcaption>
+</figure>
+
+<p>Therefore after further deliberation, the enlarged dataset was dropped in favor of the more cohesive, smaller dataset.</p>
+
+<h2 id="visualizations">Visualizations</h2>
+<p>For every combination of <b>purpose</b> with the relevant fields
+    (<b>active ingredient, inactive ingredient, dosage and administration, warnings, indications and usage</b>),
+    the following visualizations were generated.</p>
 <p>As not every drug label contained every field, drug labels without the particular field for which visualizations were generated
     were temporarily dropped. Thus it was not possible that every drug label in a purpose cluster was in every visualization for all fields. <br/>
 Another case was that no drug labels existed for certain comparisons of fields (none of these--often prescription--drug labels
-contained a valid entry for the field), and these therefore had no visualizations generated for this combination.</p>
+contained a valid entry for the field), and these therefore had no visualizations generated for this combination.
+This happened for <b>combined_purpose</b> dataset runs, but not in the final <b>purpose</b> cluster dataset</p>
 
-<h3>Word Cloud Visualization</h3>
-<p>The first visualization provided to the user upon their selection of a pre-sorted purpose and a field with which to arrange the drugs by content, is a word cloud.
+<h3 id="wordCloud">Word Cloud Visualization</h3>
+<p>The first visualization is a word cloud, provided to the user upon their selection of a pre-sorted purpose and a field with which to arrange the drugs by content.
     The word cloud depicts common words and two-word phrases within the field content of these drugs. It is generated using <b>wordcloud</b>.</p>
 <p>HTML/CSS/JS functionality was implemented to expand the word cloud image in a modal for closer examination.</p>
 
-<h3>Network Graph Visualization</h3>
+<h3 id="networkVis">Network Graph Visualization</h3>
 <p>The main visualization is the network graph, configured in <b>bokeh</b> with further user interactivity using bokeh's <b>CustomJS</b>.
-The network graph is a collection of nodes that represent topics consolidated from the user-selected field content for drug labels
-of the user-selected purpose. Each topic therefore summarizes a number of drug labels.</p>
+The network graph is a collection of topics, represented as nodes, organized from the user-selected field content for drug labels
+of the user-selected purpose. Each topic therefore encompasses a number of drug labels.</p>
 
 <p>The nodes, or topics, were generated by transforming all the pre-processed field content for all drug labels of the relevant purpose
 into a TF-IDF matrix. This TF-IDF matrix was used with the <b>sklearn</b> implementation of Latent Dirichlet Allocation to
@@ -94,7 +172,7 @@ generate topics based on the total number of drug labels: number of drug labels 
 for this formula was rather arbitrary, mainly to manage drug labels in approachable clusters and not overcrowd the visualization space.</p>
 
 <p>Latent Dirichlet Allocation relies on the assumption that a document is composed of various topics, and
-    words can be attributed to various topics, allowing for topic classification of document.
+    words can be attributed to various topics, allowing for topic classification per document.
 The Dirichlet prior is used to model the document-word-topic distributions. For my implementation, I used maximum probability of topics
     to assign each drug label to a topic node. The number of calculated topics was again, an arbitrary number of topics gleaned from optimizing
 the LDA output for a subset cluster of drug labels. Since many drug labels are assigned to less than the calculated topics in finality,
@@ -114,29 +192,39 @@ Only the top n=8 number of edges by similarity to other topics is allowed to rem
 n edges per node, though slightly differing due to the linear nature of the trim and increasing with number of nodes (topics) present.
     The matrix of edges is sparser, increasing readability for the graph.</p>
 
-<h3>Alternative Clustering and Cosine Similarity</h3>
+<h3 id="doc2vec">Attempts Using Word Embedding for Clustering and Cosine Similarity</h3>
 <p><b>Doc2vec</b> is a word embedding library that uses <b>word2vec</b> principles. Each paragraph or sample is
 represented through paragraph/document vectors, which are built upon word vectors that can be trained through two main
 models: distributed memory (paragraph vectors represent semantics along with word vectors constructed to describe all samples)
     and distributed bag of words (forcing predictions of words in each paragraph with concatenation of paragraph and word
 vectors).</p>
 
-<p>An alternative approach to purpose clustering using <b>doc2vec</b> trained a model with all existing <b>combined_purpose</b> fields of
+<p>An alternative approach to purpose clustering using <b>doc2vec</b> trained a model with either all existing <b>purpose</b> or <b>combined_purpose</b> fields of
 drug labels, and inferred a collection of vectors from relevant drug label purposes. The array of vectors was clustered using KMeans.
     With <b>doc2vec</b> implementation, there is not a direct ability to obtain top keywords as with TF-IDF. When grouped together
 under the same cluster, there did appear to be congruencies between types of drug products and clusters, though with potential anomalies.
-    Given the more involved nature of training and implementation of a model developed for unsupervised clustering, without a clearly
-    more effective result and without direct feature-word relation, TF-IDF was chosen still to be the main, faster, and
-    reasonably thorough method. If <b>doc2vec</b> is chosen again to cluster based on <b>purpose</b>-only or
-    <b>combined_purpose</b> fields' content, it may be more effective at parsing semantic meaning with refinement.</p>
+    Scoring the K-means clusters from 10-1000 for <b>purpose</b> drug labels converted to length 100 document vectors
+    demonstrated lower silhouette scores than K-means using TF-IDF and SVD, though the silhouette scores did not continue increasing
+    as with TF-IDF and SVD K-means clusters. Scoring the K-means clusters from 10-1000 for <b>combined_purpose</b> using
+doc2vec was very poor (not shown).</p>
+
+<figure>
+    <img src="{{ url_for('static', filename='about/silhouette_doc2vec_purpose-only.png') }}">
+    <figcaption>Inertia and Silhouette Scores for Purpose Clusters Using Doc2Vec Vectors</figcaption>
+</figure>
+
+<p>Given the more involved nature of training and implementation of a model developed for unsupervised clustering, without a clearly
+    more effective result and without direct feature-word relation, TF-IDF was chosen to be the main, faster, and
+    reasonably thorough matrix representation. If <b>doc2vec</b> is chosen again to cluster based on <b>purpose</b>-only or
+    <b>combined_purpose</b> fields' content, it may be more effective at parsing semantic meaning if rigorously refined.</p>
 
 <p>Out of curiosity, <b>doc2vec</b> vectors of <b>purpose</b>-only fields of drug labels were clustered using
     Latent Dirichlet Allocation into topics to observe whether purposes could fall into clearly defined groups. This yielded
-much fewer topics than the 50 topic/cluster cutoff. The topics were defined but rather general. Several identifiable subsets,
+much fewer topics than the 50 topic/cluster cutoff. The topics were defined but rather general. Several separable subsets,
 such as pairing nighttime sleep aids with rash medication, remained together. This was ultimately not the better way to
 categorize purposes for proper visualization of subsets of drugs and would likely have happened with <b>combined_purpose</b>.</p>
 
-<p>Cosine similarity calculations were also performed with paragraph vectors, inferred from models trained on unlisted
+<p>Cosine similarity calculations were also performed with document/paragraph vectors, inferred from models trained on unlisted
     drug labels (those without a valid <b>purpose</b> field). Each model was trained for a specific field (e.g. <b>warnings</b>
     had its own model), and used to calculate vectors for a particular purpose cluster of drugs. Similar to clustering, there did
 not seem to be a distinct difference in ultimate network graph results between TF-IDF and <b>doc2vec</b> methods with respect
@@ -144,7 +232,7 @@ not seem to be a distinct difference in ultimate network graph results between T
     The results could be more intently compared in the future for accuracy. TF-IDF remained the fast, feature-driven
 method used for cosine similarity weighting.</p>
 
-<h3>Graph Interactivity</h3>
+<h3 id="interactivity">Network Visualization Interactivity</h3>
 <p>In summary, the network visualization is composed of nodes that represent topics, summarizing subsets of drug labels
 of a particular purpose based on the user-selected drug field content. The edges and edge widths represent similarity between the topics.</p>
 <p>A variety of attribute information is attached to the topic nodes as a hovercard for user interactivity purposes.</p>
@@ -163,17 +251,21 @@ of a particular purpose based on the user-selected drug field content. The edges
     <li>Brand name</li>
     <li>Route</li>
     <li>Product type</li>
-    <li>Purpose for a succinct summary, or Indications and Usage if no Purpose field is found</li>
-    <li>Relevant field content</li>
+    <li>Purpose</li>
+    <li>Relevant full field content</li>
 </ul>
 
-<h2>Web Application Deployment</h2>
+<p>The purpose and field content relevant to the particular drug label were obtained from the raw content in the drug label data,
+joined by dataframe to the preprocessed dataframe for identification.</p>
+
+<h2 id="webApp">Web Application Deployment</h2>
 <p><b>Heroku</b> server built with a <b>Flask</b> web framework served as the hosting structure for this application.
-    Due to the nature of Heroku's limitations on RAM and worker processes, iterations of the full network construction process could not be
+    Due to the nature of Heroku's limitations on RAM and worker processes, iterations of the full network visualization process could not be
     applied directly using the Flask backend. This led to generation of the interactive visualizations as static (but interactable)
     HTML network graph dashboards from <b>bokeh</b> and static image file generation of the word clouds for each of the
     finite combinations of 50 purposes of drug labels sorted by one of five fields, resulting in ~250 combinations minus
-    clusters of drug labels that did not happen to have valid entries for a particular field. </p>
+    clusters of drug labels that did not happen to have valid entries for a particular field. All 250 combinations were valid
+using the <b>purpose</b> clustered dataset.</p>
 
 <p>The index page was generated using the valid combinations of purposes and fields (stored in hard-coded dictionaries within the app).
 <b>select2</b> was used to create a search-select box for the purposes.
