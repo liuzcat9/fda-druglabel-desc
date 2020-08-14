@@ -1,11 +1,13 @@
 import time, os
 import pandas as pd, numpy as np
+import matplotlib.pyplot as plt
 import ijson
 import collections, itertools
 
 import gensim
 from gensim.test.utils import get_tmpfile
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import silhouette_score
 from scipy.spatial.distance import pdist, squareform
 from sklearn.cluster import KMeans
 
@@ -120,6 +122,22 @@ def process_training_data(train_df, field):
 
     return train_corpus
 
+# ask model for save information, or otherwise train and save model
+# then, create test corpus and return
+def train_save_model_and_test_corpus(purpose_df, field):
+    # loaded dataframe has all purpose fields
+    if not os.path.isfile(field + ".model"):
+        train_corpus = process_training_data(purpose_df, field)
+        train_and_save_model(train_corpus, field)
+
+    # perform testing using essentially the same purpose data
+    model = load_doc2vec(field)
+
+    test_corpus = create_test_corpus(purpose_df, field)
+    testX = predict_doc_vectors(model, test_corpus)
+
+    return testX
+
 # train the model on the split training data
 def train_and_save_model(train_corpus, field):
     # train
@@ -181,6 +199,18 @@ def check_model(train_corpus, field):
     # for label, index in [('MOST', 0), ('SECOND-MOST', 1), ('MEDIAN', len(similars) // 2), ('LEAST', len(similars) - 1)]:
     #     print(u'%s %s: «%s»\n' % (label, similars[index], ' '.join(train_corpus[similars[index][0]].words)))
 
+# run and obtain all word/doc prediction vectors for test corpus
+def predict_doc_vectors(model, test_corpus):
+    # create all test vectors at once for comparison
+    vectors_t0 = time.time()
+    # use list of words in TaggedDocument and reshape as 1 feature to conform to sklearn
+    # n_samples x n_features
+    testX = np.array([model.infer_vector(para.words) for para in test_corpus])
+    print("Create test vectors:", str(time.time() - vectors_t0))
+    print(testX.shape)
+
+    return testX
+
 # run model on testing data
 def test_model(test_df, purpose, field):
     # obtain all fields of similar_products (only relevant products to purpose)
@@ -190,16 +220,9 @@ def test_model(test_df, purpose, field):
     # load model
     model = load_doc2vec(field)
 
-    test_corpus = create_test_corpus(purpose_df)
+    test_corpus = create_test_corpus(purpose_df, field)
 
-    # create all test vectors at once for comparison
-    vectors_t0 = time.time()
-    # use list of words in TaggedDocument and reshape as 1 feature to conform to sklearn
-    # n_samples x n_features
-    testX = np.array([model.infer_vector(para.words) for para in test_corpus])
-    print("Create test vectors:", str(time.time() - vectors_t0))
-    print(testX.shape)
-
+    testX = predict_doc_vectors(model, test_corpus)
     # run density model
     density_cluster = main.run_density_cluster(testX)
 
@@ -273,14 +296,7 @@ def test_model_by_topics(test_df, purpose, field):
     model = load_doc2vec(field)
 
     test_corpus = create_test_corpus(purpose_df, field)
-
-    # create all test vectors at once for comparison
-    vectors_t0 = time.time()
-    # use list of words in TaggedDocument and reshape as 1 feature to conform to sklearn
-    # n_samples x n_features
-    testX = np.array([model.infer_vector(para.words) for para in test_corpus])
-    print("Create test vectors:", str(time.time() - vectors_t0))
-    print(testX.shape)
+    testX = predict_doc_vectors(model, test_corpus)
 
     # calculate adjacency matrix of supernodes by averaging cosine similarity of edges in cluster
     # create adjacency matrix
@@ -340,13 +356,7 @@ def train_and_cluster_purpose(purpose_df):
     # perform testing using essentially the same purpose data but truncated to valid entries
     test_corpus = create_test_corpus(trunc_df, "combined_purpose")
 
-    # create all test vectors at once for comparison
-    vectors_t0 = time.time()
-    # use list of words in TaggedDocument and reshape as 1 feature to conform to sklearn
-    # n_samples x n_features
-    testX = np.array([model.infer_vector(para.words) for para in test_corpus])
-    print("Create test vectors:", str(time.time() - vectors_t0))
-    print(testX.shape)
+    testX = predict_doc_vectors(model, test_corpus)
 
     # k-means cluster
     km, labels = perform_k_means(testX)
@@ -387,6 +397,46 @@ def print_docs_per_cluster(labels, test_corpus):
         f.write('%s:%s\n' % (key, value))
     f.close()
 
+# perform silhouette/inertia scoring for TF-IDF > KMeans clustering
+def perform_kmeans_scoring(purpose_df):
+    # no need to perform LSA on vectors of length 100
+    testX = train_save_model_and_test_corpus(purpose_df, "purpose")
+
+    # Perform inertia/silhouette scoring for new data frame of 81,501
+    # collect average scores
+    avg_silhouettes = {}
+    avg_inertias = {}
+    # KMeans
+    n_clusters_range = [10, 50, 100, 500, 1000]
+    # find ideal number of clusters
+    for n_clusters in n_clusters_range:
+        n_trials = 5
+        sum_sil = 0
+        sum_inert = 0
+        # conduct multiple trials per n_clusters
+        for trial in range(n_trials):
+            km = KMeans(n_clusters=n_clusters)
+            km.fit(testX)
+
+            # Calculate the mean silhouette coefficient for the number of clusters chosen
+            sum_sil += silhouette_score(testX, km.predict(testX), metric='euclidean')
+            sum_inert += km.inertia_
+
+        avg_silhouettes[n_clusters] = sum_sil / n_trials
+        avg_inertias[n_clusters] = sum_inert / n_trials
+        print("Calculated for", str(n_clusters), "clusters:", avg_silhouettes[n_clusters])
+
+    fig, ax = plt.subplots(1, 2)
+    ax[0].plot(*zip(*list(avg_inertias.items())))
+    ax[1].plot(*zip(*list(avg_silhouettes.items())))
+
+    ax[0].title.set_text("Inertias")
+    ax[0].set(xlabel="Clusters", ylabel="Inertia")
+    ax[1].title.set_text("Silhouettes")
+    ax[1].set(xlabel="Clusters", ylabel="Silhouette Score")
+
+    plt.show()
+
 if __name__ == "__main__":
     field = "warnings"
     json_list = ["drug-label-0001-of-0009.json", "drug-label-0002-of-0009.json", "drug-label-0003-of-0009.json",
@@ -394,7 +444,11 @@ if __name__ == "__main__":
                  "drug-label-0007-of-0009.json", "drug-label-0008-of-0009.json", "drug-label-0009-of-0009.json"]
 
     # cluster by purpose
-    train_and_cluster_purpose(preprocessing.read_preprocessed_to_pkl("purpose_indic_full_drug_df"))
+    full_purpose_df = preprocessing.read_preprocessed_to_pkl("purpose_full_drug_df")
+    purpose_df = full_purpose_df.copy()
+    purpose_df = purpose_df.dropna(subset=["id", "brand_name", "route", "product_type"])
+
+    perform_kmeans_scoring(purpose_df)
 
     # full_df = write_and_read_train_data(json_list, "full_train_df")
     # train_df = write_and_read_tokenized_data(full_df, "tokenized_train_df")
