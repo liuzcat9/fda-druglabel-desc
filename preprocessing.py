@@ -81,9 +81,7 @@ def preprocess_and_write_df(raw_drug_df, filename):
     print(drug_df["indications_and_usage"])
 
     # perform purpose clustering using cleaned lists
-    # use two fields for purpose: purpose & indications and usage
-    drug_df["combined_purpose"] = drug_df["purpose"].fillna("") + " " + drug_df["indications_and_usage"].fillna("")
-    drug_df = cluster_purpose(drug_df)
+    drug_df = cluster_purpose(drug_df, "purpose")
 
     # alphabetize brand names for future display
     drug_df = drug_df.sort_values(by=["brand_name"])
@@ -120,11 +118,11 @@ def cluster_groups_to_df(drug_df, km, cluster_list):
     print("Add cluster column to drug_df: " , str(time.time() - cluster_df_t0))
 
 # purpose clustering
-def cluster_purpose(drug_df):
+def cluster_purpose(drug_df, field):
     # 5. See what TF-IDF can do with respect to clustering purposes
     # TF-IDF
     tfidfv_t0 = time.time()
-    purpose_list = drug_df["combined_purpose"].tolist()
+    purpose_list = drug_df[field].tolist()
     tfidfv = TfidfVectorizer()
     X = tfidfv.fit_transform(purpose_list)
     print("TF-IDF: ", str(time.time() - tfidfv_t0))
@@ -138,6 +136,8 @@ def cluster_purpose(drug_df):
     print("Fit KMeans: ", str(time.time() - km_t0))
 
     print("Num KMeans labels: ", str(len(km.labels_)))
+
+    print("Silhouette score: ", str(silhouette_score(transformedX, km.predict(transformedX), metric='euclidean')))
 
     cluster_list = obtain_top_cluster_terms(tfidfv, lsa, km, 50)
 
