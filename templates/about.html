@@ -26,13 +26,13 @@
 <h5>This page is meant to provide insight into the data and workflow used to produce the visualizations of the application.</h5>
 
 <p>The overall goal of FDA Drug Label Visualization is to provide the opportunity to visually traverse a network graph
-    containing a wide array of drugs serving a particular <b>purpose</b> to observe similarities and differences within the contents of its drug label <b>fields</b>.</p>
+    containing a wide array of FDA-approved drugs serving a particular <b>purpose</b> to observe similarities and differences within the contents of its drug label <b>fields</b>.</p>
 
 <p>Plenty of information is available on the Internet regarding FDA-approved drugs, but it remains primarily in text-based formats without
-a way to zoom in and out of various subsets of drugs. Conslidating FDA drug label data into a visualization relating drugs to
+a way to zoom in and out of various subsets of drugs. Consolidating FDA drug label data into a visualization relating drugs to
 each other may be an approachable answer. This type of visualization network may be useful not only for observing relationships between drugs, but
 any other content that contains extensive subcategories and products.
-    The proof-of-concept application on this website is a functional, static-based but interactive web visualization.</p>
+    The proof-of-concept application on this website includes a functional, static-based, interactive web visualization.</p>
 
 <h2 id="originalDataset">Original Dataset</h2>
 <p>The full data set is available on <a href="https://open.fda.gov/downloads/">openFDA</a> as API endpoint data.
@@ -58,30 +58,30 @@ The display of drug types for this purpose dataset is as follows.
 </figure>
 
 <p>However, to provide drug labels with adequate descriptive fields for the user, drug labels with invalid
-    <b>brand_name, route, product_type (OTC/Prescription)</b>
+    <b>brand_name, route,</b> and <b>product_type (OTC/Prescription)</b>
     were dropped from the dataframe to yield 51,940 final drug labels pickled into a file for use in preprocessing.</p>
 
 <p>For the remaining valid drug labels, the following fields were tokenized and lemmatized by <b>spacy</b>:
-    <b>purpose, active_ingredient, inactive_ingredient, warnings, dosage_and_administration, indications_and_usage</b>
+    <b>purpose, active_ingredient, inactive_ingredient, warnings, dosage_and_administration,</b> and <b>indications_and_usage</b>
     and pickled as a separate dataframe.
-    These would be the fields selectable by the user: clusters of different <b>purpose</b> drugs
-    and the field by which to sort those drug labels belonging to that <b>purpose</b> in terms of similarity. <br/>
-Several word lemmas were openly restricted from the tokenized output: "purpose", "use", "active", "inactive", "ingredient", "warning", "treatment", "indication."
-These words were extremely common and not informative to the visualizations.</p>
+    These would be the fields selectable by the user: clusters of drug labels by <b>purpose</b>
+    and the field by which to sort that group in terms of similarity. <br/>
+Several word lemmas were openly restricted from the tokenized output: "purpose", "use", "active", "inactive", "ingredient", "warning", "treatment", and "indication."
+These words were extremely common and not informative to the visualizations.</p><br/>
 
-<p>The drug labels were clustered into 50 purposes such that the user would be able to select from these pre-sorted purposes when observing drugs.</p> <br/>
-<p>The preprocessed <b>purpose</b> fields for all valid drug labels were transformed into a TF-IDF matrix.</p> <br/>
+<p>The drug labels were clustered into 50 purposes such that the user would be able to select from these pre-sorted purposes when observing drugs.</p>
+<p>The preprocessed <b>purpose</b> fields for all valid drug labels were first transformed into a TF-IDF matrix.</p>
 
 <p>Term frequency-inverse document frequency (TF-IDF) is a common representation for documents consisting of phrases to sentences.
-    It accounts for appearance of words in documents, while weighting against rather mundane words that typically appear in the English language.</p> <br/>
+    It accounts for appearance of words in documents, while weighting against rather mundane words that typically appear in the English language.</p>
 
 <p>With likely tens of thousands of features, the columns of the TF-IDF matrix were consolidated to 300 by
 <b>sklearn</b> TruncatedSVD, or essentially latent semantic analysis (LSA). Truncated singular value decomposition results in linear
 dimensionality reduction. Unlike PCA, which brings about a similar end product, it is particularly ideal for sparse matrices.
 TruncatedSVD, or LSA with respect to natural language processing constructs a lower-dimension representation of the documents:
-    in this case, the documents would be the drug label purposes.</p>
+    in this case, the documents were the drug label purpose descriptions.</p>
 
-<p>K-means clustering, an unsupervised clustering method defaulted to Euclidean distance, was performed on the TF-IDF transformed drug label purposes.
+<p>K-means clustering, an unsupervised clustering method defaulted to Euclidean distance, was performed on the transformed TF-IDF drug label purposes.
 K-means partitioned all (purposes of) drug labels into a preset number of clusters. In the naive implementation, k-means assigns drug labels
 to centroids and repeatedly updates the means based on least squared Euclidean distance until convergence (assignment unchanging).
 K-means clustering effectiveness can be represented by the inertia--sum of squared distances between samples and
@@ -102,13 +102,12 @@ K-means clustering effectiveness can be represented by the inertia--sum of squar
     <figcaption>Inertia and Silhouette Scores for Purpose Clusters With SVD (Final)</figcaption>
 </figure>
 
-
 <p>A rather arbitrary 50 clusters (silhouette score = .589) was chosen after intended optimization of cluster number
-    maximizing silhouette scores and reducing inertia revealed that the clusters were not decreasing in effectiveness past 1000 clusters,
+    to maximize silhouette scores and reducing inertia revealed that the clusters were not decreasing in effectiveness past 1000 clusters,
     which would be unmanageable both for users and project scope.
 Top importance keywords were retrieved from the TF-IDF features corresponding to each of these 50 clusters,
-to constitute the purpose per cluster. Though clustering results were not perfect, some categories were particularly effective
-and specific. Further refinement on clustering method as well as lack of or increased text preprocessing may improve results.</p> <br/>
+to constitute the purpose category per cluster. Though clustering results were not perfect, some categories were particularly effective
+and specific. Further refinement on clustering method as well as lack of or increased text preprocessing may improve results.</p>
 
 <p>Here is the distribution of drug labels among the final purpose clusters.</p>
 
@@ -126,7 +125,7 @@ This resulted in ~159,800 drug labels with complete fields for <b>purpose</b> or
     the <b>purpose</b> is more relevant, and for others the <b>indications and usage</b> is.</p>
 
 <p>Again, drug labels without adequate descriptive fields for the user:
-    <b>brand_name, route, product_type (OTC/Prescription)</b> were dropped from the dataframe.
+    <b>brand_name, route,</b> and <b>product_type (OTC/Prescription)</b> were dropped from the dataframe.
     Ultimately, there were about 81,000 "complete" drug labels corresponding to drugs for the purpose of the project.</p>
 
 <p>All relevant drug label fields were similarly tokenized and lemmatized as in the final analysis with the blacklisted word lemmas.
@@ -154,7 +153,7 @@ clustering OTC drugs (typically shorter descriptions) and prescription drugs (ty
     were temporarily dropped. Thus it was not possible that every drug label in a purpose cluster was in every visualization for all fields. <br/>
 Another case was that no drug labels existed for certain comparisons of fields (none of these--often prescription--drug labels
 contained a valid entry for the field), and these therefore had no visualizations generated for this combination.
-This happened for <b>combined_purpose</b> dataset runs, but not in the final <b>purpose</b> cluster dataset</p>
+This happened only for <b>combined_purpose</b> dataset runs and not for the final <b>purpose</b> cluster dataset.</p>
 
 <h3 id="wordCloud">Word Cloud Visualization</h3>
 <p>The first visualization is a word cloud, provided to the user upon their selection of a pre-sorted purpose and a field with which to arrange the drugs by content.
@@ -163,8 +162,8 @@ This happened for <b>combined_purpose</b> dataset runs, but not in the final <b>
 
 <h3 id="networkVis">Network Graph Visualization</h3>
 <p>The main visualization is the network graph, configured in <b>bokeh</b> with further user interactivity using bokeh's <b>CustomJS</b>.
-The network graph is a collection of topics, represented as nodes, organized from the user-selected field content for drug labels
-of the user-selected purpose. Each topic therefore encompasses a number of drug labels.</p>
+The network graph is a connection of nodes representing topics, which were organized from the user-selected field content
+    for drug labels of the user-selected purpose. Each topic encompasses a number of drug labels.</p>
 
 <p>The nodes, or topics, were generated by transforming all the pre-processed field content for all drug labels of the relevant purpose
 into a TF-IDF matrix. This TF-IDF matrix was used with the <b>sklearn</b> implementation of Latent Dirichlet Allocation to
@@ -193,7 +192,7 @@ n edges per node, though slightly differing due to the linear nature of the trim
     The matrix of edges is sparser, increasing readability for the graph.</p>
 
 <h3 id="doc2vec">Attempts Using Word Embedding for Clustering and Cosine Similarity</h3>
-<p><b>Doc2vec</b> is a word embedding library that uses <b>word2vec</b> principles. Each paragraph or sample is
+<p><b>gensim's doc2vec</b> is a word embedding library that uses <b>word2vec</b> principles. Each paragraph or sample is
 represented through paragraph/document vectors, which are built upon word vectors that can be trained through two main
 models: distributed memory (paragraph vectors represent semantics along with word vectors constructed to describe all samples)
     and distributed bag of words (forcing predictions of words in each paragraph with concatenation of paragraph and word
@@ -235,7 +234,7 @@ method used for cosine similarity weighting.</p>
 <h3 id="interactivity">Network Visualization Interactivity</h3>
 <p>In summary, the network visualization is composed of nodes that represent topics, summarizing subsets of drug labels
 of a particular purpose based on the user-selected drug field content. The edges and edge widths represent similarity between the topics.</p>
-<p>A variety of attribute information is attached to the topic nodes as a hovercard for user interactivity purposes.</p>
+<p>Within the produced visual itself, a variety of attribute information is attached to the topic nodes as a hovercard for user interactivity purposes.</p>
 <p>Topics:</p>
 <ul>
     <li>Topic number</li>
@@ -261,9 +260,9 @@ joined by dataframe to the preprocessed dataframe for identification.</p>
 <h2 id="webApp">Web Application Deployment</h2>
 <p><b>Heroku</b> server built with a <b>Flask</b> web framework served as the hosting structure for this application.
     Due to the nature of Heroku's limitations on RAM and worker processes, iterations of the full network visualization process could not be
-    applied directly using the Flask backend. This led to generation of the interactive visualizations as static (but interactable)
+    applied directly using the Flask backend. This led to local generation of the interactive visualizations as static (but interactable)
     HTML network graph dashboards from <b>bokeh</b> and static image file generation of the word clouds for each of the
-    finite combinations of 50 purposes of drug labels sorted by one of five fields, resulting in ~250 combinations minus
+    finite combinations of 50 purposes of drug labels sorted by one of the five listed fields, resulting in ~250 combinations minus
     clusters of drug labels that did not happen to have valid entries for a particular field. All 250 combinations were valid
 using the <b>purpose</b> clustered dataset.</p>
 
@@ -272,13 +271,13 @@ using the <b>purpose</b> clustered dataset.</p>
     Additional <b>JS</b> code was written to create dynamic disabling of fields for purposes that had no valid visualizations for those fields.</p>
 
 <p>The results page was rendered using dynamic urls such that someone could paste the known purpose and fields to reload the page.
-The results page mainly formatted and embedded upon the <b>Amazon S3</b> static HTML and image files to allow user interaction.</p>
+The results page mainly formatted and embedded the static HTML and image files stored on <b>Amazon S3</b>.</p>
 
 <p>Static files were served on a public read-only <b>Amazon S3</b> bucket, to be retrieved when the user submitted the relevant
 selections for purpose and field.</p>
 
 <p>Web hosting plans could certainly be expanded, especially in paid services, to allow for more dynamic background processes
-or to host more RAM on the server. This was the workaround for the scope of the Capstone.</p>
+or to host more RAM on the server. This was the workaround for the scope of the capstone.</p>
 
 
 {% endblock %}

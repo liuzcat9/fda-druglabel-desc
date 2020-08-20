@@ -1,3 +1,7 @@
+body {
+    padding-top: 70px;
+}
+
 #cover {
     background: url('/static/background.png') center center no-repeat;
     background-size: cover;
