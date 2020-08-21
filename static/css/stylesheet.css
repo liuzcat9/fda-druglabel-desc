@@ -2,6 +2,10 @@ body {
     padding-top: 70px;
 }
 
+.close {
+    padding-top: 70px;
+}
+
 #cover {
     background: url('/static/background.png') center center no-repeat;
     background-size: cover;
@@ -16,7 +20,9 @@ body {
     transition: 0.2s;
 }
 
-#modalImg:hover {opacity: 0.7;}
+#modalImg:hover {
+    opacity: 0.7;
+}
 
 .modal {
   display: none; /* Hidden by default */

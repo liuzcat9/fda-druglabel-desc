@@ -60,7 +60,8 @@ purposes = {"Hand Sanitizer and Cleanser": 'antiseptic bacteria hand skin decrea
        "Miscellaneous Anti-inflammatory": 'acute allergic dermatitis disease arthritis'}
 
 fields = {"Active Ingredient": "active_ingredient", "Inactive Ingredient": "inactive_ingredient",
-          "Warnings": "warnings", "Dosage and Administration": "dosage_and_administration"}
+          "Warnings": "warnings", "Dosage and Administration": "dosage_and_administration",
+          "Indications and Usage": "indications_and_usage"}
 
 disabled_field_dict = {'acne blemish pimple new blackhead': [],
                        'acne medication management rosacea vulgaris': [],

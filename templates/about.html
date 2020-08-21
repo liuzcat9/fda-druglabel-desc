@@ -238,10 +238,10 @@ of a particular purpose based on the user-selected drug field content. The edges
 <p>Topics:</p>
 <ul>
     <li>Topic number</li>
+    <li>Top 10 keywords corresponding to the topic</li>
     <li>Number of drug labels</li>
-    <li>First 10 names</li>
-    <li>First 10 routes</li>
-    <li>First 10 types (OTC, prescription)</li>
+    <li>Number of drug labels categorized by route</li>
+    <li>Number of drug labels categorized by type (prescription/OTC)</li>
 </ul>
 
 <p>An interactive clickable element for the nodes coded in HTML and bokeh's <b>CustomJS</b> reveals a div containing
@@ -255,7 +255,9 @@ of a particular purpose based on the user-selected drug field content. The edges
 </ul>
 
 <p>The purpose and field content relevant to the particular drug label were obtained from the raw content in the drug label data,
-joined by dataframe to the preprocessed dataframe for identification.</p>
+joined by dataframe to the preprocessed dataframe for identification. Many brand names are for some reason identical, though
+have unique classifiers such as product id in the dataset and often are referring to products with different characteristics
+(e.g. different doses).</p>
 
 <h2 id="webApp">Web Application Deployment</h2>
 <p><b>Heroku</b> server built with a <b>Flask</b> web framework served as the hosting structure for this application.
