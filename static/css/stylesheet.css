@@ -6,6 +6,10 @@ body {
     padding-top: 70px;
 }
 
+.jumbotronCustomColor {
+    background-color: rgba(19, 59, 74, 0.1);
+}
+
 #cover {
     background: url('/static/background.png') center center no-repeat;
     background-size: cover;
@@ -14,6 +18,7 @@ body {
     z-index: 0;
 }
 
+/* modal styles sourced with help from internet */
 #modalImg {
     border-radius: 5px;
     cursor: pointer;
@@ -34,8 +39,8 @@ body {
   width: 100%; /* Full width */
   height: 100%; /* Full height */
   overflow: auto; /* Enable scroll if needed */
-  background-color: rgb(0,0,0); /* Fallback color */
-  background-color: rgba(0,0,0,0.8); /* Black w/ opacity */
+  background-color: rgb(0, 0, 0); /* Fallback color */
+  background-color: rgba(19, 59, 74, 0.9); /* dark w/ opacity */
 }
 
 .modal-content {
