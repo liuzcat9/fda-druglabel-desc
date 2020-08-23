@@ -524,17 +524,19 @@ def generate_super_attr_mappings(purpose_df, cluster_ref, *topics_dict):
         # shorten names if in a cluster
         # truncate or leave as is
         names = names[0:cutoff]
-        routes = purpose_df.loc[purpose_df["id"].isin(num_to_id[cluster]), "route"].tolist()[0:cutoff]
-        types = purpose_df.loc[purpose_df["id"].isin(num_to_id[cluster]), "product_type"].tolist()[0:cutoff]
+        route_groups = [name + ": " + str(row[0])
+                        for name, row in purpose_df.loc[purpose_df["id"].isin(num_to_id[cluster])].groupby("route").count().iterrows()]
+        type_groups = [name + ": " + str(row[0])
+                       for name, row in purpose_df.loc[purpose_df["id"].isin(num_to_id[cluster])].groupby("product_type").count().iterrows()]
+
         if num_per_cluster > cutoff:
             # add ellipses for more
             names.append("...")
-            routes.append("...")
-            types.append("...")
 
         attr_dict[cluster] = {"id": "Topic " + str(i) if num_per_cluster > 1 else "Individual Drug",
                               "num_drugs": num_per_cluster, "size_drugs": math.log(num_per_cluster) * 2 + 3,
-                              "name": ", ".join(names), "route": ", ".join(routes), "product_type": ", ".join(types)}
+                              "name": ", ".join(names),
+                              "routes": ", ".join(route_groups), "product_types": ", ".join(type_groups)}
 
         # if sorting by topics cluster, use dictionary in args tuple
         if topics_dict:
@@ -594,7 +596,8 @@ def generate_cluster_num_to_html(purpose_df, cluster_ref, field):
             html_str = """
             <div class="card">
                 <div class="card-header">
-                        <a href="#%s" class="collapsed card-link" data-toggle="collapse" data-target="#%s" aria-expanded="true" aria-controls="%s">
+                        <a href="#%s" style="color: #226882;" class="collapsed card-link" data-toggle="collapse" 
+                        data-target="#%s" aria-expanded="true" aria-controls="%s">
                             %s
                         </a>
                 </div>
@@ -656,49 +659,75 @@ def generate_purpose_graph(sparse_mat, attr_dict, num_to_name):
 
     return venn_G
 
+# helper function to create bokeh HoverTool
+def get_custom_hovertool():
+    # create custom hovertool for font color
+    HOVER_TOOLTIPS = """
+                    <style>
+                    .bk-tooltip-arrow {
+                        visibility: none;
+                    }
+                    </style>
+                       <div>
+                           <div>
+                               <span style="font-size: 12px; color: #226882;">Topic ID: </span><span>@id<span>
+                           </div>
+                           <div>
+                               <span style="font-size: 12px; color: #226882;">Keywords: </span><span>@keywords</span>
+                           </div>
+                           <div>
+                               <span style="font-size: 12px; color: #226882;"># Drugs: </span><span>@num_drugs</span>
+                           </div>
+                           <div>
+                               <span style="font-size: 12px; color: #226882;">By Route: </span><span>@routes</span>
+                           </div>
+                           <div>
+                               <span style="font-size: 12px; color: #226882;">By Type: </span><span>@product_types</span>
+                           </div>
+                       </div>
+                   """
+    return HoverTool(tooltips=HOVER_TOOLTIPS, show_arrow=False)
+
+# helper function to create JS callback for revealing drug label names upon clicking a node
+def get_custom_tap_callback(drug_div, num_to_html):
+    return CustomJS(args=dict(div=drug_div), code="""
+        var names = %s;
+        var names_str = "";
+        var cluster_i = cb_data.source.selected.indices[0];
+            for (var name_i = 0; name_i < names[cluster_i].length; name_i ++) {
+                names_str += names[cluster_i][name_i];
+            }
+        div.text = "<b>Products</b><br/>"
+        + "<div id='accordion' style='height: 500px; display: block; overflow: auto;'>"
+        + names_str + "</div>";
+    """ % (list(num_to_html.values())))
+
 # plot graph of drugs in a particular purpose (bokeh)
 def generate_graph_plot(venn_G, purpose, field, num_to_html, topics=False):
     # Display the network graph from the venn diagram interactions
     plot = figure(title="Network of Top Similar Drugs by " + " ".join([word.capitalize() for word in field.split("_")]),
                   x_range=(-10, 10), y_range=(-10, 10), plot_width=600, plot_height=500,
-                  tools="wheel_zoom, pan, lasso_select, box_select", active_scroll="wheel_zoom",
+                  tools="wheel_zoom, pan, lasso_select, box_select",
+                  active_scroll="wheel_zoom",
                   toolbar_location="left")
 
     # create general layout
     drug_panel = Div(width=400, height=plot.plot_height, height_policy="fixed")
     layout = row(plot, drug_panel, height=500, height_policy="fixed")
 
-    # generate extra field for topic keywords
-    if topics:
-        node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("number of drugs", "@num_drugs"),
-                                            ("names", "@name"), ("routes", "@route"), ("types", "@product_type"),
-                                              ("keywords", "@keywords")], show_arrow=False)
-    # generate hover capabilities
-    else:
-        node_hover_tool = HoverTool(tooltips=[("id", "@id"), ("number of drugs", "@num_drugs"),
-                                              ("name", "@name"), ("route", "@route")], show_arrow=False)
+    node_hover_tool = get_custom_hovertool()
 
     # create tool to list drug names when node for topic is clicked
-    callback_tap_tool = CustomJS(args=dict(div=drug_panel), code="""
-var names = %s;
-var names_str = "";
-var cluster_i = cb_data.source.selected.indices[0];
-    for (var name_i = 0; name_i < names[cluster_i].length; name_i ++) {
-        names_str += names[cluster_i][name_i];
-    }
-div.text = "<b>Products</b><br/>"
-+ "<div id='accordion' style='height: 500px; display: block; overflow: auto;'>"
-+ names_str + "</div>";
-    """ % (list(num_to_html.values())))
+    callback_tap_tool = get_custom_tap_callback(drug_panel, num_to_html)
+
+    # set additional toolbar attributes
+    plot.add_tools(node_hover_tool, TapTool(callback=callback_tap_tool), ResetTool())
 
     # Hide unnecessary plot attributes
     plot.axis.visible = False
     plot.xgrid.visible = False
     plot.ygrid.visible = False
     plot.outline_line_color = None
-
-    # set additional toolbar attributes
-    plot.add_tools(node_hover_tool, TapTool(callback=callback_tap_tool), ResetTool())
 
     graph = from_networkx(venn_G, nx.fruchterman_reingold_layout, scale=10, center=(0, 0))
 
@@ -847,7 +876,7 @@ def main():
 
     print(purposes)
 
-    # purposes = ["indicate usage patient symptom tablet"]
+    # purposes = ["aid antiseptic antimicrobial topical pain"]
     # fields = ["warnings"]
 
     for purpose in purposes:
