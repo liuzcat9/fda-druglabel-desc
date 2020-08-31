@@ -278,6 +278,14 @@ The results page mainly formatted and embedded the static HTML and image files s
 <p>Static files were served on a public read-only <b>Amazon S3</b> bucket, to be retrieved when the user submitted the relevant
 selections for purpose and field.</p>
 
+<p>Alternatively, to bypass free tier RAM and database storage limits,
+    it may be feasible to store the full preprocessed dataframe as a database on a service such as <b>AWS RDS</b>
+    and connect/call smaller chunks of data to visualize specific <b>field</b> content of a specific <b>purpose</b> cluster of
+    drugs live. This would likely reduce memory footprint for all matrix operations and graph information storage afterward.
+    However, the RAM usage may still not be quite enough, as previous use of a pickled data subset
+    surpassed memory limits when performing TF-IDF and further graph generation. This approach
+    may be useful for the smaller-scale purpose-field combinations.</p>
+
 <p>Web hosting plans could certainly be expanded, especially in paid services, to allow for more dynamic background processes
 or to host more RAM on the server. This was the workaround for the scope of the capstone.</p>
 
