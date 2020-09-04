@@ -1,10 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for
-import sys, time
+import sys, time, os
 import json
 
 import observe_data, main, preprocessing, parse_json
-
-import pandas as pd
+from sqlalchemy import create_engine
 
 app = Flask(__name__)
 
@@ -89,9 +88,14 @@ disabled_field_dict = {'acid reducer antacid salicylic otc': [], 'acne gel pimpl
                        'toothpaste anticavity antigingivitis antisensitivity whiten': [], 'topical analgesic anesthetic menthol camphor': [],
                        'vasoconstrictor protectant local anesthetic 25': [], 'wrinkle anti brightening skin whiten': []}
 
+postgres_engine = create_engine(os.getenv("POSTGRES_URI"))
 
 @app.route('/')
 def index():
+    print(postgres_engine.execute("""SELECT brand_name, purpose_cluster
+                                      FROM purpose_drug_labels
+                                      WHERE purpose_cluster = 'aid antiseptic antimicrobial topical pain'
+                                      LIMIT 5;""").fetchall())
     reversed_fields = {val: key for key, val in fields.items()}
     return render_template('index.html',
                            purposes=purposes, fields=fields,
