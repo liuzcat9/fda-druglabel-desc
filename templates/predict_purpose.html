@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<p>This is a prototype classification model (~83% validation accuracy) with 64 FDA-approved drug <b>purpose</b>
+    categories.
+    These were drawn from the dataset, as long as these specific categories had over 200 drugs attributed to them.
+    This is certainly not a complete picture of all FDA-approved drugs or even FDA-approved drugs with labeled purposes.
+</p>
+<p>Type in comma-separated active and/or inactive ingredients of your drug to see what purpose it gets sorted into.</p>
+
+<form name="myForm" action="/predict-purpose/results" method="post" onsubmit="return validateForm()">
+    <div class="form-group">
+        <label>Active Ingredients</label>
+        <input name="active_ingredient" class="form-control">
+    </div>
+    <div class="form-group">
+        <label>Inactive Ingredients</label>
+        <input name="inactive_ingredient" class="form-control">
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+
+</form>
+
+<script>
+    function validateForm() {
+        var active = document.forms["myForm"]["active_ingredient"].value;
+        var inactive = document.forms["myForm"]["inactive_ingredient"].value;
+        if (active == "" && inactive == "") {
+        alert("At least one ingredient must be filled out!");
+        return false;
+        }
+    }
+</script>
+
+{% endblock %}

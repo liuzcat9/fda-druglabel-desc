@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for
-import sys, time, os
+import sys, time, os, re
 import json
 
 import observe_data, main, preprocessing, parse_json
@@ -125,6 +125,22 @@ def load_result(purpose, field):
 @app.route('/about')
 def about():
     return render_template('about.html')
+
+@app.route('/predict-purpose')
+def predict_purpose():
+    return render_template('predict_purpose.html')
+
+@app.route('/predict-purpose/results', methods=['GET', 'POST'])
+def predict_purpose_result():
+    if request.method == 'POST':
+        active = request.form["active_ingredient"]
+        inactive = request.form["inactive_ingredient"]
+
+        total_ingred = active + "," + inactive
+        tokenized_text = " ".join(re.split(r'\s?,\s?', total_ingred))
+        print(tokenized_text)
+
+    return render_template('predict_purpose.html')
 
 if __name__ == '__main__':
     app.run(port=33507, debug=True)
