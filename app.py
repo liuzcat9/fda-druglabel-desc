@@ -1,8 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for
 import sys, time, os, re
 import json
+from joblib import load
 
 import observe_data, main, preprocessing, parse_json
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sqlalchemy import create_engine
 
 app = Flask(__name__)
@@ -126,21 +128,29 @@ def load_result(purpose, field):
 def about():
     return render_template('about.html')
 
+# routes for predicting purpose
+
 @app.route('/predict-purpose')
 def predict_purpose():
     return render_template('predict_purpose.html')
 
-@app.route('/predict-purpose/results', methods=['GET', 'POST'])
+@app.route('/predict-purpose/result', methods=['GET', 'POST'])
 def predict_purpose_result():
+    # load model to predict
+    mnb = load("models/purpose_model.joblib")
+
     if request.method == 'POST':
         active = request.form["active_ingredient"]
         inactive = request.form["inactive_ingredient"]
 
         total_ingred = active + "," + inactive
-        tokenized_text = " ".join(re.split(r'\s?,\s?', total_ingred))
-        print(tokenized_text)
+        tokenized_text_list = re.split(r'\s?,\s?', total_ingred)
+        tokenized_text = " ".join(tokenized_text_list)
 
-    return render_template('predict_purpose.html')
+        purpose_result = mnb.predict([tokenized_text])[0]
+
+    return render_template('predict_purpose_result.html',
+                           tokenized_text_list=tokenized_text_list, purpose_result=purpose_result)
 
 if __name__ == '__main__':
     app.run(port=33507, debug=True)
