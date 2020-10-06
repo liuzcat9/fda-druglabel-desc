@@ -1,13 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<p>This is a prototype classification model (~83% validation accuracy) with 64 FDA-approved drug <b>purpose</b>
-    categories.
-    These were drawn from the dataset, as long as these specific categories had over 200 drugs attributed to them.
-    This is certainly not a complete picture of all FDA-approved drugs or even FDA-approved drugs with labeled purposes.
-</p>
 <p>Type in comma-separated active and/or inactive ingredients of your drug to see what purpose it gets sorted into.</p>
-
 <form name="myForm" action="/predict-purpose/result" method="post" onsubmit="return validateForm()">
     <div class="form-group">
         <label>Active Ingredients</label>
@@ -20,6 +14,30 @@
     <button type="submit" class="btn btn-primary">Submit</button>
 
 </form>
+
+<br/>
+<h5>About</h5>
+<p>The current model loaded for the ingredients panel is a simple Dense-layered (<b>tensorflow/keras</b>) neural network
+with ~91% accuracy. This was the highest accuracy thus far with some parameter tuning among different models.</p>
+<p>The comprehensive average accuracies tested using 5-fold cross validation will be posted soon.</p>
+<table>
+    <thead>
+        <tr>
+            <th>Techniques</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Neural Network</td>
+            <td>Linear Support Vector Classification</td>
+            <td>Random Forest</td>
+            <td>Multinomial Naive Bayes</td>
+        </tr>
+    </tbody>
+</table>
+<p>There were 64 categories of purpose drawn from the dataset that each had over 200 drugs attributed to them.
+    This is certainly not a complete picture of all FDA-approved drugs or even FDA-approved drugs with labeled purposes.
+</p>
 
 <script>
     function validateForm() {

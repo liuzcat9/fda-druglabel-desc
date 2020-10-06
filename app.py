@@ -1,7 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for
 import sys, time, os, re
 import json
-from joblib import load
+import pickle
+
+import numpy as np
+from tensorflow import keras
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 import observe_data, main, preprocessing, parse_json
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -137,17 +142,32 @@ def predict_purpose():
 @app.route('/predict-purpose/result', methods=['GET', 'POST'])
 def predict_purpose_result():
     # load model to predict
-    mnb = load("models/purpose_model.joblib")
+    # mnb = load("models/purpose_model.joblib")
+
+    tokenizer = pickle.load(open("models/nn_purpose_model/tokenizer.pkl", 'rb'))
+
+    model = keras.models.load_model("models/nn_purpose_model")
+
+    y_label = pickle.load(open("models/nn_purpose_model/labels.pkl", 'rb'))
 
     if request.method == 'POST':
         active = request.form["active_ingredient"]
         inactive = request.form["inactive_ingredient"]
 
         total_ingred = active + "," + inactive
+        # filter out punctuation
         tokenized_text_list = re.split(r'\s?,\s?', total_ingred)
         tokenized_text = " ".join(tokenized_text_list)
 
-        purpose_result = mnb.predict([tokenized_text])[0]
+        # purpose_result = mnb.predict([tokenized_text])[0]
+
+        X_test = tokenizer.texts_to_sequences([tokenized_text])
+
+        # pad sequences
+        X_test = pad_sequences(X_test, padding='post', maxlen=200)
+
+        y_str = y_label.inverse_transform(np.argmax(model.predict(X_test), axis=-1))
+        purpose_result = y_str[0]
 
     return render_template('predict_purpose_result.html',
                            tokenized_text_list=tokenized_text_list, purpose_result=purpose_result)
