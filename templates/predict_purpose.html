@@ -11,27 +11,38 @@
         <label>Inactive Ingredients</label>
         <input name="inactive_ingredient" class="form-control">
     </div>
-    <button type="submit" class="btn btn-primary">Submit</button>
+    <button type="submit" class="btn btn-custom">Submit</button>
 
 </form>
 
 <br/>
 <h5>About</h5>
 <p>The current model loaded for the ingredients panel is a simple Dense-layered (<b>tensorflow/keras</b>) neural network
-with ~91% accuracy. This was the highest accuracy thus far with some parameter tuning among different models.</p>
-<p>The comprehensive average accuracies tested using 5-fold cross validation will be posted soon.</p>
-<table>
+with ~91% validation accuracy. This was the highest accuracy thus far with some parameter tuning among different models.</p>
+<p>The average comprehensive model accuracies tested using 5-fold cross validation are posted below.</p>
+<table class="table">
     <thead>
         <tr>
-            <th>Techniques</th>
+            <th scope="col">Techniques</th>
+            <th scope="col">Average 5-fold Accuracy</th>
         </tr>
     </thead>
     <tbody>
         <tr>
             <td>Neural Network</td>
+            <td>91%</td>
+        </tr>
+        <tr>
             <td>Linear Support Vector Classification</td>
-            <td>Random Forest</td>
+            <td>90%</td>
+        </tr>
+        <tr>
             <td>Multinomial Naive Bayes</td>
+            <td>84%</td>
+        </tr>
+        <tr>
+            <td>Random Forest</td>
+            <td>35%</td>
         </tr>
     </tbody>
 </table>
